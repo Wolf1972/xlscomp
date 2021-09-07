@@ -17,9 +17,12 @@ public class XLSCompareMain {
     public static void main (String[] args) {
         System.out.println("Trying to compare XLSX with hierarchy rows.");
 
-        String sampleName = "d:\\tmp\\sample.xlsx";
-        String checkName = "d:\\tmp\\check.xlsx";
-        String resultName = "d:\\tmp\\result.xlsx";
+        String dir = System.getProperty("user.dir");
+        System.out.println("Current directory: " + dir);
+
+        String sampleName = dir + "\\data\\sample.xlsx";
+        String checkName = dir + ".\\data\\check.xlsx";
+        String resultName = dir + ".\\data\\result.xlsx";
 
         doCompare(sampleName, checkName, resultName);
     }
