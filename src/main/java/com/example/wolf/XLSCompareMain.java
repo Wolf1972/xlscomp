@@ -10,7 +10,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class XLSCompareMain {
@@ -18,11 +18,20 @@ public class XLSCompareMain {
         System.out.println("Trying to compare XLSX with hierarchy rows.");
 
         String dir = System.getProperty("user.dir");
-        System.out.println("Current directory: " + dir);
-
         String sampleName = dir + "\\data\\sample.xlsx";
         String checkName = dir + ".\\data\\check.xlsx";
         String resultName = dir + ".\\data\\result.xlsx";
+
+        if (args.length >= 3) {
+            sampleName = args[0];
+            checkName = args[1];
+            resultName = args[2];
+        }
+        else {
+            System.out.println("Usage: <sample file> <new file to compare> <file with results>");
+            System.out.println("You didn't define any parameter, try to default names...");
+            System.out.println("Current directory: " + dir);
+        }
 
         doCompare(sampleName, checkName, resultName);
     }
@@ -34,16 +43,16 @@ public class XLSCompareMain {
 
             fileName = sampleName;
             System.out.println("Loading sample file " + fileName);
-            HashMap<String, String> sample = readFromExcel(fileName);
+            LinkedHashMap<String, String> sample = readFromExcel(fileName);
             System.out.println("Rows loaded: " + sample.size());
 
             fileName = checkName;
             System.out.println("Loading check file " + fileName);
-            HashMap<String, String> check = readFromExcel(fileName);
+            LinkedHashMap<String, String> check = readFromExcel(fileName);
             System.out.println("Rows loaded: " + check.size());
 
-            HashMap<String, String> deleted = new HashMap<>();
-            HashMap<String, String> added = new HashMap<>();
+            LinkedHashMap<String, String> deleted = new LinkedHashMap<>();
+            LinkedHashMap<String, String> added = new LinkedHashMap<>();
 
             for (Map.Entry<String, String> item : sample.entrySet()) {
                 String key = item.getKey();
@@ -72,9 +81,9 @@ public class XLSCompareMain {
 
     }
 
-    private static HashMap<String, String> readFromExcel(String file) throws IOException{
+    private static LinkedHashMap<String, String> readFromExcel(String file) throws IOException{
 
-        HashMap<String, String> array = new HashMap<>();
+        LinkedHashMap<String, String> array = new LinkedHashMap<>();
 
         XSSFWorkbook myExcelBook = new XSSFWorkbook(new FileInputStream(file));
         XSSFSheet myExcelSheet = myExcelBook.getSheetAt(0);
@@ -94,7 +103,7 @@ public class XLSCompareMain {
             int level = 0;
             String name = "";
 
-            String currentPath = getPath(path);
+            String currentPath = buildPath(path);
 
             if (row.getCell(0).getCellType() == XSSFCell.CELL_TYPE_NUMERIC) {
                 level = (int) row.getCell(0).getNumericCellValue();
@@ -111,23 +120,22 @@ public class XLSCompareMain {
                 break;
             }
 
-            if (level > oldLevel) {
-                if (level - oldLevel > 1) {
-                    System.out.println("ERROR. Row " + rowNum + " has level " + level + " not suitable for previous row level " + oldLevel);
-                    break;
+            if (level != oldLevel) {
+                if (level > oldLevel) {
+                    if (level - oldLevel > 1) {
+                        System.out.println("ERROR. Row " + rowNum + " has level " + level + ". It's not suitable for previous row level " + oldLevel);
+                        break;
+                    } else {
+                        if (oldName.length() > 0) path.add(oldName);
+                    }
                 }
-                else {
-                    if (oldName.length() > 0) path.add(oldName);
-                    currentPath = getPath(path);
-                    oldLevel = level;
-                }
-            }
-            else if (level < oldLevel) {
-                for (int i = oldLevel; i > level; i--) {
-                    path.remove(i - 1);
+                else  {
+                    for (int i = oldLevel; i > level; i--) {
+                        path.remove(i - 1);
+                    }
                 }
                 oldLevel = level;
-                currentPath = getPath(path);
+                currentPath = buildPath(path);
             }
 
             array.put(currentPath + "|" + name, name);
@@ -149,19 +157,7 @@ public class XLSCompareMain {
 
     }
 
-    private static String getPath(ArrayList<String> path) {
-        StringBuilder str = new StringBuilder();
-        for (int i = 0; i < path.size(); i++) {
-            if (i > 1) str.append("/");
-            String node = path.get(i);
-            if (node.contains("/") && i > 1) str.append("\"");
-            str.append(path.get(i));
-            if (node.contains("/") && i > 1) str.append("\"");
-        }
-        return str.toString();
-    }
-
-    private static void outResult(String fileName, HashMap<String, String> added, HashMap<String, String> deleted) {
+    private static void outResult(String fileName, LinkedHashMap<String, String> added, LinkedHashMap<String, String> deleted) {
 
         Workbook book = new XSSFWorkbook();
 
@@ -173,10 +169,12 @@ public class XLSCompareMain {
                 System.out.println("+++ Added rows: " + added.size() + " +++");
                 for (Map.Entry<String, String> item : added.entrySet()) {
                     Row row = sheet.createRow(rowNum);
-                    Cell name = row.createCell(0);
-                    name.setCellValue(item.getKey());
+                    Cell path = row.createCell(0);
+                    path.setCellValue(getPath(item.getKey()));
+                    Cell name = row.createCell(1);
+                    name.setCellValue(getName(item.getKey()));
                     rowNum++;
-                    System.out.println(item.getKey());
+                    System.out.println(path + " > " + name);
                 }
             } else {
                 System.out.println("There are no added rows.");
@@ -188,10 +186,12 @@ public class XLSCompareMain {
                 System.out.println("--- Deleted rows: " + deleted.size() + "---");
                 for (Map.Entry<String, String> item : deleted.entrySet()) {
                     Row row = sheet.createRow(rowNum);
-                    Cell name = row.createCell(0);
-                    name.setCellValue(item.getKey());
+                    Cell path = row.createCell(0);
+                    path.setCellValue(getPath(item.getKey()));
+                    Cell name = row.createCell(1);
+                    name.setCellValue(getName(item.getKey()));
                     rowNum++;
-                    System.out.println(item.getKey());
+                    System.out.println(path + " > " + name);
                 }
             } else {
                 System.out.println("There are no deleted rows.");
@@ -204,5 +204,35 @@ public class XLSCompareMain {
                 System.out.println("Error saving file: " + fileName);
             }
         }
+    }
+
+    private static String buildPath(ArrayList<String> path) {
+        StringBuilder str = new StringBuilder();
+        for (int i = 0; i < path.size(); i++) {
+            if (i > 1) str.append("/");
+            String node = path.get(i);
+            if (node.contains("/") && i > 1) str.append("\"");
+            str.append(path.get(i));
+            if (node.contains("/") && i > 1) str.append("\"");
+        }
+        return str.toString();
+    }
+
+    private static String getName(String item) {
+        String name = "";
+        if (item != null) {
+            int pos = item.lastIndexOf('|');
+            if (pos >= 0 && pos < item.length() - 1) name = item.substring(pos + 1);
+        }
+        return name;
+    }
+
+    private static String getPath(String item) {
+        String name = "";
+        if (item != null) {
+            int pos = item.lastIndexOf('|');
+            if (pos >= 0) name = item.substring(0, pos);
+        }
+        return name;
     }
 }
