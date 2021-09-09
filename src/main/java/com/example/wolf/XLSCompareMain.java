@@ -1,10 +1,7 @@
 package com.example.wolf;
 
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFCell;
-import org.apache.poi.xssf.usermodel.XSSFRow;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.usermodel.*;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -93,7 +90,7 @@ public class XLSCompareMain {
         int oldLevel = 0;
         String oldName = "";
         ArrayList<String> path = new ArrayList<>();
-        path.add("/");
+        path.add("\\");
 
         do {
 
@@ -103,7 +100,7 @@ public class XLSCompareMain {
             int level = 0;
             String name = "";
 
-            String currentPath = buildPath(path);
+            String currentPath = printPath(path);
 
             if (row.getCell(0).getCellType() == XSSFCell.CELL_TYPE_NUMERIC) {
                 level = (int) row.getCell(0).getNumericCellValue();
@@ -135,7 +132,7 @@ public class XLSCompareMain {
                     }
                 }
                 oldLevel = level;
-                currentPath = buildPath(path);
+                currentPath = printPath(path);
             }
 
             array.put(currentPath + "|" + name, name);
@@ -165,34 +162,16 @@ public class XLSCompareMain {
 
             if (added.size() > 0) {
                 Sheet sheet = book.createSheet("Added");
-                int rowNum = 0;
                 System.out.println("+++ Added rows: " + added.size() + " +++");
-                for (Map.Entry<String, String> item : added.entrySet()) {
-                    Row row = sheet.createRow(rowNum);
-                    Cell path = row.createCell(0);
-                    path.setCellValue(getPath(item.getKey()));
-                    Cell name = row.createCell(1);
-                    name.setCellValue(getName(item.getKey()));
-                    rowNum++;
-                    System.out.println(path + " > " + name);
-                }
+                outOneSheet(sheet, added);
             } else {
                 System.out.println("There are no added rows.");
             }
 
             if (deleted.size() > 0) {
                 Sheet sheet = book.createSheet("Deleted");
-                int rowNum = 0;
                 System.out.println("--- Deleted rows: " + deleted.size() + "---");
-                for (Map.Entry<String, String> item : deleted.entrySet()) {
-                    Row row = sheet.createRow(rowNum);
-                    Cell path = row.createCell(0);
-                    path.setCellValue(getPath(item.getKey()));
-                    Cell name = row.createCell(1);
-                    name.setCellValue(getName(item.getKey()));
-                    rowNum++;
-                    System.out.println(path + " > " + name);
-                }
+                outOneSheet(sheet, deleted);
             } else {
                 System.out.println("There are no deleted rows.");
             }
@@ -206,14 +185,51 @@ public class XLSCompareMain {
         }
     }
 
-    private static String buildPath(ArrayList<String> path) {
+    private static void outOneSheet(Sheet sheet, LinkedHashMap<String, String> array) {
+        CellStyle style = sheet.getWorkbook().createCellStyle();
+        Font font = sheet.getWorkbook().createFont();
+        font.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
+        style.setFont(font);
+
+        int rowNum = 0;
+        int level = 0;
+        String oldPathStr = "";
+        for (Map.Entry<String, String> item : array.entrySet()) {
+            String pathStr = getPath(item.getKey());
+            if (!pathStr.equals(oldPathStr)) {
+                String[] pathArr = pathStr.split("\\\\");
+                level = 0;
+                for (int i = 1; i < pathArr.length; i++) {
+                    Row pathRow = sheet.createRow(rowNum);
+                    Cell pathCount = pathRow.createCell(0);
+                    pathCount.setCellStyle(style);
+                    pathCount.setCellValue(i);
+                    Cell pathHead = pathRow.createCell(1);
+                    pathHead.setCellStyle(style);
+                    pathHead.setCellValue(pathArr[i]);
+                    rowNum++;
+                    level = i;
+                }
+                oldPathStr = pathStr;
+            }
+            Row row = sheet.createRow(rowNum);
+            Cell path = row.createCell(0);
+            path.setCellValue(level + 1);
+            Cell name = row.createCell(1);
+            name.setCellValue(getName(item.getKey()));
+            rowNum++;
+            // System.out.println(path + " > " + name);
+        }
+    }
+
+    private static String printPath(ArrayList<String> path) {
         StringBuilder str = new StringBuilder();
         for (int i = 0; i < path.size(); i++) {
-            if (i > 1) str.append("/");
+            if (i > 1) str.append("\\");
             String node = path.get(i);
-            if (node.contains("/") && i > 1) str.append("\"");
+            if (node.contains("\\") && i > 1) str.append("\"");
             str.append(path.get(i));
-            if (node.contains("/") && i > 1) str.append("\"");
+            if (node.contains("\\") && i > 1) str.append("\"");
         }
         return str.toString();
     }
