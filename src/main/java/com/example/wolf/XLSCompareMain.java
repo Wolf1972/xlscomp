@@ -9,6 +9,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -330,6 +331,28 @@ public class XLSCompareMain {
 
     private static void copySheet(String sourceFile, XSSFSheet targetSheet) {
 
+        final int HEADER_LAST_ROW = 1;
+
+        class Group { // Item for rows grouping
+            int start;
+            int end;
+            int level;
+            Group(int start, int end, int level) {
+                this.start = start;
+                this.end = end;
+                this.level = level;
+            }
+        }
+
+        ArrayList<Group> groups = new ArrayList<>();
+        groups.add(new Group(3, 23, 2));
+        groups.add(new Group(4, 8, 3));
+        groups.add(new Group(13, 15, 3));
+        groups.add(new Group(17, 18, 3));
+
+        // Common styles for all group levels (outlines)
+        HashMap<Integer, ArrayList<XSSFCellStyle>> groupStyles = new HashMap<>();
+
         try {
 
             XSSFWorkbook sourceBook = new XSSFWorkbook(new FileInputStream(sourceFile));
@@ -339,7 +362,31 @@ public class XLSCompareMain {
             for (int i = 0; i < lastRow; i++) {
                 int outlineLevel = sourceSheet.getRow(i).getOutlineLevel();
                 System.out.println("Copying row " + i + " Outline: " + outlineLevel);
-                copyRow(sourceSheet, targetSheet, i, i);
+                if (outlineLevel > 0) {
+                    int specifiedOutlineLevel = (int) sourceSheet.getRow(i).getCell(0).getNumericCellValue();
+                    if (outlineLevel + 1 != specifiedOutlineLevel) {
+                        System.out.println("Error. Outline level " + outlineLevel + " doesn't suite with level specified in first column: " + specifiedOutlineLevel);
+                    }
+                }
+
+                ArrayList<XSSFCellStyle> styles = new ArrayList<>();
+                if (i <= HEADER_LAST_ROW || !groupStyles.containsKey(outlineLevel)) {
+                    // Styles for header or new outline level
+                    // Copy style from old cell and apply to new cell: all styles after specified row are common - takes it from array
+                    for (int j = 0; j < sourceSheet.getRow(i).getLastCellNum(); j++) {
+                        XSSFCell cell = sourceSheet.getRow(i).getCell(j);
+                        XSSFCellStyle newCellStyle = targetSheet.getWorkbook().createCellStyle();
+                        newCellStyle.cloneStyleFrom(cell.getCellStyle());
+                        styles.add(newCellStyle);
+                    }
+                    if (i > HEADER_LAST_ROW) {
+                        groupStyles.put(outlineLevel, styles);
+                    }
+                }
+                else {
+                    styles = groupStyles.get(outlineLevel);
+                }
+                copyRow(sourceSheet, targetSheet, i, i, styles);
             }
 
             sourceBook.close();
@@ -349,10 +396,16 @@ public class XLSCompareMain {
             System.out.println("Error while reading source sheet: " + sourceFile);
         }
 
+        targetSheet.setRowSumsBelow(false);
+        for (Group group : groups) {
+            targetSheet.groupRow(group.start, group.end - 1);
+        }
+
     }
 
     private static void copyRow(XSSFSheet sourceWorksheet, XSSFSheet targetWorksheet,
-                                int sourceRowNum, int targetRowNum) {
+                                int sourceRowNum, int targetRowNum,
+                                ArrayList<XSSFCellStyle> columnStyles) {
         // Get the source / new row
         XSSFRow newRow = targetWorksheet.getRow(targetRowNum);
         XSSFRow sourceRow = sourceWorksheet.getRow(sourceRowNum);
@@ -376,13 +429,12 @@ public class XLSCompareMain {
                 continue;
             }
 
-            // Copy style from old cell and apply to new cell
-            XSSFCellStyle newCellStyle = targetWorksheet.getWorkbook().createCellStyle();
-            newCellStyle.cloneStyleFrom(oldCell.getCellStyle());
+            if (i < columnStyles.size()) {
+                XSSFCellStyle newCellStyle = columnStyles.get(i);
+                newCell.setCellStyle(newCellStyle);
+            }
 
-            newCell.setCellStyle(newCellStyle);
             targetWorksheet.setColumnWidth(i, sourceWorksheet.getColumnWidth(i));
-
 
             // If there is a cell comment, copy
             if (oldCell.getCellComment() != null) {
@@ -435,5 +487,4 @@ public class XLSCompareMain {
             }
         }
     }
-
 }
