@@ -16,7 +16,7 @@ import java.util.Map;
 public class XLSCompareMain {
 
     public static void main (String[] args) {
-        System.out.println("Trying to compare XLSX with hierarchy rows.");
+        System.out.println("Trying to compare XLSX with requirements hierarchy.");
 
         String dir = System.getProperty("user.dir");
         String sampleName = dir + "\\data\\sample.xlsx";
@@ -329,6 +329,14 @@ public class XLSCompareMain {
         return name;
     }
 
+    /**
+     * Copying first sheet from specified source file into specified target sheet
+     * Defines outline level while copying for grouping rows
+     * Collects styles while copying: several header rows separately with common styles for requirement rows
+     * Grouping rows with outline levels after copying
+     * @param sourceFile - source file name
+     * @param targetSheet - target sheet
+     */
     private static void copySheet(String sourceFile, XSSFSheet targetSheet) {
 
         final int HEADER_LAST_ROW = 1;
@@ -350,7 +358,7 @@ public class XLSCompareMain {
         groups.add(new Group(13, 15, 3));
         groups.add(new Group(17, 18, 3));
 
-        // Common styles for all group levels (outlines)
+        // Common styles for all group levels (with outline levels)
         HashMap<Integer, ArrayList<XSSFCellStyle>> groupStyles = new HashMap<>();
 
         try {
@@ -365,13 +373,13 @@ public class XLSCompareMain {
                 if (outlineLevel > 0) {
                     int specifiedOutlineLevel = (int) sourceSheet.getRow(i).getCell(0).getNumericCellValue();
                     if (outlineLevel + 1 != specifiedOutlineLevel) {
-                        System.out.println("Error. Outline level " + outlineLevel + " doesn't suite with level specified in first column: " + specifiedOutlineLevel);
+                        System.out.println("Error. Real row outline level " + outlineLevel + " doesn't suite with level has specified in first column: " + specifiedOutlineLevel);
                     }
                 }
 
-                ArrayList<XSSFCellStyle> styles = new ArrayList<>();
+                ArrayList<XSSFCellStyle> styles = new ArrayList<>(); // Styles for current row
                 if (i <= HEADER_LAST_ROW || !groupStyles.containsKey(outlineLevel)) {
-                    // Styles for header or new outline level
+                    // Styles for header row or row with unknown outline level
                     // Copy style from old cell and apply to new cell: all styles after specified row are common - takes it from array
                     for (int j = 0; j < sourceSheet.getRow(i).getLastCellNum(); j++) {
                         XSSFCell cell = sourceSheet.getRow(i).getCell(j);
@@ -379,12 +387,12 @@ public class XLSCompareMain {
                         newCellStyle.cloneStyleFrom(cell.getCellStyle());
                         styles.add(newCellStyle);
                     }
-                    if (i > HEADER_LAST_ROW) {
+                    if (i > HEADER_LAST_ROW) { // For regular rows with requirement add common style for outline level
                         groupStyles.put(outlineLevel, styles);
                     }
                 }
                 else {
-                    styles = groupStyles.get(outlineLevel);
+                    styles = groupStyles.get(outlineLevel); // Use common style has already defined
                 }
                 copyRow(sourceSheet, targetSheet, i, i, styles);
             }
@@ -403,6 +411,17 @@ public class XLSCompareMain {
 
     }
 
+    /**
+     * Copying one specified row (by position) from specified source sheet to specified target sheet
+     * If row with specified number already exists in target row, then row inserts with scroll rows below
+     * Sets specified styles for target row
+     * Based on some stackoverflow topics
+     * @param sourceWorksheet - source sheet
+     * @param targetWorksheet = target sheet
+     * @param sourceRowNum = source row number
+     * @param targetRowNum - destination row number
+     * @param columnStyles - styles for all columns
+     */
     private static void copyRow(XSSFSheet sourceWorksheet, XSSFSheet targetWorksheet,
                                 int sourceRowNum, int targetRowNum,
                                 ArrayList<XSSFCellStyle> columnStyles) {
