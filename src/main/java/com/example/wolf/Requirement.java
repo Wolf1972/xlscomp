@@ -7,7 +7,7 @@ import org.apache.poi.xssf.usermodel.XSSFRow;
 public class Requirement {
 
     String id; // Requirement id
-    int level; // Requirement level
+    Long level; // Requirement level
     String name; // Requirement
     String priority; // Requirement priority
     String done; // Requirement has realised
@@ -15,8 +15,8 @@ public class Requirement {
     String integration; // Integration requirement
     String comment; // Comment for requirement
     String linked; // Linked requirement
-    String version; // Plan to realised in version
-    String release; // Plan to realized in release
+    Long version; // Plan to realised in version
+    Long release; // Plan to realized in release
     String questions; // Work questions for requirement
 
     @Override
@@ -26,9 +26,9 @@ public class Requirement {
 
         Requirement that = (Requirement) o;
 
-        if (level != that.level) return false;
         if (!id.equals(that.id)) return false;
-        if (!name.equals(that.name)) return false;
+        if (level != null ? !level.equals(that.level) : that.level != null) return false;
+        if (name != null ? !name.equals(that.name) : that.name != null) return false;
         if (priority != null ? !priority.equals(that.priority) : that.priority != null) return false;
         if (done != null ? !done.equals(that.done) : that.done != null) return false;
         if (reference != null ? !reference.equals(that.reference) : that.reference != null) return false;
@@ -43,8 +43,8 @@ public class Requirement {
     @Override
     public int hashCode() {
         int result = id.hashCode();
-        result = 31 * result + level;
-        result = 31 * result + name.hashCode();
+        result = 31 * result + (level != null ? level.hashCode() : 0);
+        result = 31 * result + (name != null ? name.hashCode() : 0);
         result = 31 * result + (priority != null ? priority.hashCode() : 0);
         result = 31 * result + (done != null ? done.hashCode() : 0);
         result = 31 * result + (reference != null ? reference.hashCode() : 0);
@@ -65,7 +65,7 @@ public class Requirement {
         try {
             int cells = row.getLastCellNum();
 
-            if (cells > 0) level = (int) row.getCell(0).getNumericCellValue(); // Requirement level
+            if (cells > 0) level = Math.round(row.getCell(0).getNumericCellValue()); // Requirement level
             if (cells > 1) name = row.getCell(1).getStringCellValue(); // Requirement
             if (cells > 2) priority = row.getCell(2).getStringCellValue(); // Requirement priority
             if (cells > 3) done = row.getCell(3).getStringCellValue(); // Requirement has realised
@@ -75,8 +75,8 @@ public class Requirement {
             if (cells > 7) comment = row.getCell(7).getStringCellValue(); // Comment for requirement
             if (cells > 8) linked = row.getCell(8).getStringCellValue(); // Linked requirement
 
-            if (cells > 13) version = row.getCell(13).getStringCellValue(); // Plan to realised in version
-            if (cells > 14) release = row.getCell(14).getStringCellValue(); // Plan to realized in release
+            if (cells > 13) version = Math.round(row.getCell(13).getNumericCellValue()); // Plan to realised in version
+            if (cells > 14) release = Math.round(row.getCell(14).getNumericCellValue()); // Plan to realized in release
             if (cells > 15) questions = row.getCell(15).getStringCellValue(); // Work questions for requirement
         }
         catch (Exception e) {

@@ -342,21 +342,23 @@ public class XLSCompareMain {
         final int HEADER_LAST_ROW = 1;
 
         class Group { // Item for rows grouping
-            int start;
-            int end;
-            int level;
+            private int start;
+            private int end;
+            private int level;
+            private boolean closed;
             Group(int start, int end, int level) {
                 this.start = start;
                 this.end = end;
                 this.level = level;
+                this.closed = false;
             }
         }
 
         ArrayList<Group> groups = new ArrayList<>();
-        groups.add(new Group(3, 23, 2));
-        groups.add(new Group(4, 8, 3));
-        groups.add(new Group(13, 15, 3));
-        groups.add(new Group(17, 18, 3));
+        // groups.add(new Group(3, 22, 1));
+        // groups.add(new Group(4, 7, 2));
+        // groups.add(new Group(13, 14, 2));
+        // groups.add(new Group(17, 17, 2));
 
         // Common styles for all group levels (with outline levels)
         HashMap<Integer, ArrayList<XSSFCellStyle>> groupStyles = new HashMap<>();
@@ -367,17 +369,38 @@ public class XLSCompareMain {
             XSSFSheet sourceSheet = sourceBook.getSheetAt(0);
             int oldOutlineLevel = 0;
             int lastRow = sourceSheet.getLastRowNum();
-            for (int i = 0; i < lastRow; i++) {
+
+            for (int i = 0; i <= lastRow; i++) {
+
                 int outlineLevel = sourceSheet.getRow(i).getOutlineLevel();
-                System.out.println("Copying row " + i + " Outline: " + outlineLevel);
-                if (outlineLevel > 0) {
+//                System.out.println("Copying row " + i + " Outline: " + outlineLevel);
+
+                if (i > HEADER_LAST_ROW && outlineLevel >= 0) {
+
                     int specifiedOutlineLevel = (int) sourceSheet.getRow(i).getCell(0).getNumericCellValue();
                     if (outlineLevel + 1 != specifiedOutlineLevel) {
-                        System.out.println("Error. Real row outline level " + outlineLevel + " doesn't suite with level has specified in first column: " + specifiedOutlineLevel);
+                        System.out.println("Error in row " + i + ". Real row outline level " + (outlineLevel + 1) + " doesn't suite with level has specified in first column: " + specifiedOutlineLevel);
+                    }
+
+                    if (oldOutlineLevel != outlineLevel) {
+                        if (oldOutlineLevel < outlineLevel) { // Dive! Dive! Dive
+                            groups.add(new Group(i, 0, outlineLevel));
+                        } else { // Surfacing!
+                            for (int g = outlineLevel; g <= oldOutlineLevel; g++) { // May be close several groups in the same time
+                                for (Group group : groups) {
+                                    if (!group.closed && group.level == g + 1) {
+                                        group.end = i - 1;
+                                        group.closed = true;
+                                    }
+                                }
+                            }
+                        }
+                        oldOutlineLevel = outlineLevel;
                     }
                 }
 
                 ArrayList<XSSFCellStyle> styles = new ArrayList<>(); // Styles for current row
+
                 if (i <= HEADER_LAST_ROW || !groupStyles.containsKey(outlineLevel)) {
                     // Styles for header row or row with unknown outline level
                     // Copy style from old cell and apply to new cell: all styles after specified row are common - takes it from array
@@ -399,14 +422,22 @@ public class XLSCompareMain {
 
             sourceBook.close();
 
+            for (Group group : groups) { // Close all unclosed groups with last row
+                if (!group.closed) {
+                    group.end = lastRow;
+                    group.closed = true;
+                }
+            }
+
         }
         catch (IOException e) {
             System.out.println("Error while reading source sheet: " + sourceFile);
         }
 
-        targetSheet.setRowSumsBelow(false);
+        targetSheet.setRowSumsBelow(false); // Set group header at the top of group
         for (Group group : groups) {
-            targetSheet.groupRow(group.start, group.end - 1);
+            // System.out.println(group.start + " : " + group.end + " - " + group.level);
+            targetSheet.groupRow(group.start, group.end);
         }
 
     }
