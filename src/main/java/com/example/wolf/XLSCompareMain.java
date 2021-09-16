@@ -15,71 +15,73 @@ import java.util.Map;
 
 public class XLSCompareMain {
 
+    public static final int HEADER_LAST_ROW = 1;
+
     public static void main (String[] args) {
         System.out.println("Trying to compare XLSX with requirements hierarchy.");
 
         String dir = System.getProperty("user.dir");
-        String sampleName = dir + "\\data\\sample.xlsx";
-        String checkName = dir + ".\\data\\check.xlsx";
+        String oldName = dir + "\\data\\old.xlsx";
+        String newName = dir + ".\\data\\new.xlsx";
         String resultName = dir + ".\\data\\result.xlsx";
 
         if (args.length >= 3) {
-            sampleName = args[0];
-            checkName = args[1];
+            oldName = args[0];
+            newName = args[1];
             resultName = args[2];
         }
         else {
-            System.out.println("Usage: <sample file> <new file to compare> <file with results>");
+            System.out.println("Usage: <old file> <new file to compare> <file with results>");
             System.out.println("You didn't define any parameter, try to default names...");
             System.out.println("Current directory: " + dir);
         }
 
-        doCompare(sampleName, checkName, resultName);
+        doCompare(oldName, newName, resultName);
     }
 
     /**
      * Compare procedure
-     * @param sampleName - source file name
-     * @param checkName - file name for compare
+     * @param oldName - old file name
+     * @param newName - new file name for compare
      * @param resultName - file name for result
      */
-    private static void doCompare(String sampleName, String checkName, String resultName) {
+    private static void doCompare(String oldName, String newName, String resultName) {
 
         String fileName = "?";
         try {
 
-            fileName = sampleName;
-            System.out.println("Loading sample file " + fileName);
-            LinkedHashMap<String, Requirement> sample = readFromExcel(fileName);
-            System.out.println("Rows loaded: " + sample.size());
+            fileName = oldName;
+            System.out.println("Loading old file " + fileName);
+            LinkedHashMap<String, Requirement> oldMap = readFromExcel(fileName);
+            System.out.println("Rows loaded: " + oldMap.size());
 
-            fileName = checkName;
-            System.out.println("Loading check file " + fileName);
-            LinkedHashMap<String, Requirement> check = readFromExcel(fileName);
-            System.out.println("Rows loaded: " + check.size());
+            fileName = newName;
+            System.out.println("Loading new file " + fileName);
+            LinkedHashMap<String, Requirement> newMap = readFromExcel(fileName);
+            System.out.println("Rows loaded: " + newMap.size());
 
-            LinkedHashMap<String, Requirement> deleted = new LinkedHashMap<>();
-            LinkedHashMap<String, Requirement> added = new LinkedHashMap<>();
+            LinkedHashMap<String, Requirement> deletedMap = new LinkedHashMap<>();
+            LinkedHashMap<String, Requirement> addedMap = new LinkedHashMap<>();
 
-            for (Map.Entry<String, Requirement> item : sample.entrySet()) {
+            for (Map.Entry<String, Requirement> item : oldMap.entrySet()) {
                 String key = item.getKey();
                 Requirement req = item.getValue();
-                if (!check.containsKey(key)) {
-                    deleted.put(key, req);
+                if (!newMap.containsKey(key)) {
+                    deletedMap.put(key, req);
                 }
             }
 
-            for (Map.Entry<String, Requirement> item : check.entrySet()) {
+            for (Map.Entry<String, Requirement> item : newMap.entrySet()) {
                 String key = item.getKey();
                 Requirement req = item.getValue();
-                if (!sample.containsKey(key)) {
-                    added.put(key, req);
+                if (!oldMap.containsKey(key)) {
+                    addedMap.put(key, req);
                 }
             }
 
             System.out.println("Compared.");
 
-            outResult(sampleName, checkName, resultName, sample, check, added, deleted);
+            outResult(oldName, newName, resultName, oldMap, newMap, addedMap, deletedMap);
 
         }
         catch (IOException e) {
@@ -94,21 +96,23 @@ public class XLSCompareMain {
      * @return - array with sheet data
      * @throws IOException
      */
-    private static LinkedHashMap<String, Requirement> readFromExcel(String file) throws IOException{
+    private static LinkedHashMap<String, Requirement> readFromExcel(String file) throws IOException {
 
         LinkedHashMap<String, Requirement> array = new LinkedHashMap<>();
 
         XSSFWorkbook book = new XSSFWorkbook(new FileInputStream(file));
         XSSFSheet sheet = book.getSheetAt(0);
 
-        int rowNum = 2; // Start row (skip header)
-
         int oldLevel = 0;
         String oldName = "";
         ArrayList<String> path = new ArrayList<>();
         path.add("\\");
 
-        do {
+        int lastRow = sheet.getLastRowNum();
+
+        for (int rowNum = 0; rowNum <= lastRow; rowNum++) {
+
+            if (rowNum <= HEADER_LAST_ROW) continue; // Skip header
 
             XSSFRow row = sheet.getRow(rowNum);
             if (row == null) break;
@@ -128,7 +132,7 @@ public class XLSCompareMain {
 
             if (level == 0) {
                 if (name.length() != 0) {
-                    System.out.println("ERROR. Row " + rowNum + " has no level but name with value: " + name);
+                    System.out.println("ERROR. Row " + (rowNum + 1) + " has no level but name with value: " + name);
                 }
                 break;
             }
@@ -136,7 +140,7 @@ public class XLSCompareMain {
             if (level != oldLevel) {
                 if (level > oldLevel) {
                     if (level - oldLevel > 1) {
-                        System.out.println("ERROR. Row " + rowNum + " has level " + level + ". It's not suitable for previous row level " + oldLevel);
+                        System.out.println("ERROR. Row " + (rowNum + 1) + " has level " + level + ". It's not suitable for previous row level " + oldLevel);
                         break;
                     } else {
                         if (oldName.length() > 0) path.add(oldName);
@@ -160,12 +164,9 @@ public class XLSCompareMain {
 
             oldName = name;
 
-            rowNum++;
-
             if (level < 1) break;
 
         }
-        while (true);
 
         book.close();
 
@@ -175,38 +176,38 @@ public class XLSCompareMain {
 
     /**
      * Outputs compare results
-     * @param sampleFileName - sample file name
-     * @param checkFileName - file name for check
+     * @param oldFileName - old file name
+     * @param newFileName - new file name for compare
      * @param resultFileName - file name for results
-     * @param sample - array with source data
-     * @param check - array with data for compare
-     * @param added - array with added rows
-     * @param deleted - array with deleted rows
+     * @param oldMap - map with source data
+     * @param newMap - map with data for compare
+     * @param addedMap - map with added rows
+     * @param deletedMap - map with deleted rows
      */
-    private static void outResult(String sampleFileName, String checkFileName, String resultFileName,
-                                  LinkedHashMap<String, Requirement> sample, LinkedHashMap<String, Requirement> check,
-                                  LinkedHashMap<String, Requirement> added, LinkedHashMap<String, Requirement> deleted) {
+    private static void outResult(String oldFileName, String newFileName, String resultFileName,
+                                  LinkedHashMap<String, Requirement> oldMap, LinkedHashMap<String, Requirement> newMap,
+                                  LinkedHashMap<String, Requirement> addedMap, LinkedHashMap<String, Requirement> deletedMap) {
 
         XSSFWorkbook book = new XSSFWorkbook();
 
-        if (added.size() > 0 || deleted.size() > 0) {
+        if (addedMap.size() > 0 || deletedMap.size() > 0) {
 
-            if (added.size() > 0) {
-                System.out.println("+++ Added rows: " + added.size() + " +++");
-                XSSFSheet sampleSheet = book.createSheet("Old");
-                copySheet(sampleFileName, sampleSheet);
+            if (addedMap.size() > 0) {
+                System.out.println("+++ Added rows: " + addedMap.size() + " +++");
+                XSSFSheet oldSheet = book.createSheet("Old");
+                copySheet(oldFileName, oldSheet);
                 XSSFSheet addSheet = book.createSheet("Added");
-                outOneDiffSheet(addSheet, added);
+                outOneDiffSheet(addSheet, addedMap);
             } else {
                 System.out.println("There are no added rows.");
             }
 
-            if (deleted.size() > 0) {
-                XSSFSheet checkSheet = book.createSheet("New");
-                copySheet(checkFileName, checkSheet);
-                XSSFSheet sheet = book.createSheet("Deleted");
-                System.out.println("--- Deleted rows: " + deleted.size() + "---");
-                outOneDiffSheet(sheet, deleted);
+            if (deletedMap.size() > 0) {
+                XSSFSheet newSheet = book.createSheet("New");
+                copySheet(newFileName, newSheet);
+                XSSFSheet delSheet = book.createSheet("Deleted");
+                System.out.println("--- Deleted rows: " + deletedMap.size() + "---");
+                outOneDiffSheet(delSheet, deletedMap);
             } else {
                 System.out.println("There are no deleted rows.");
             }
@@ -221,9 +222,9 @@ public class XLSCompareMain {
     }
 
     /**
-     * Outputs one source sheet (sample or check)
-     * @param sheet - sheet
-     * @param array - array to fill sheet
+     * Fills one Excel sheet from specified map one to one
+     * @param sheet - Excel sheet
+     * @param array - map to fill sheet
      */
     private static void outOneSheet(XSSFSheet sheet, LinkedHashMap<String, Requirement> array) {
         int rowNum = 0;
@@ -235,14 +236,14 @@ public class XLSCompareMain {
     }
 
     /**
-     * Outputs one different sheet (added or deleted rows)
-     * @param sheet - sheet
+     * Outputs one Excel sheet with added or deleted rows with full path rows above
+     * @param sheet - Excel sheet
      * @param array - array to fill sheet
      */
     private static void outOneDiffSheet(XSSFSheet sheet, LinkedHashMap<String, Requirement> array) {
         XSSFCellStyle style = sheet.getWorkbook().createCellStyle();
         XSSFFont font = sheet.getWorkbook().createFont();
-        font.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
+        font.setColor(IndexedColors.GREY_50_PERCENT.getIndex()); // Color for path rows
         style.setFont(font);
 
         int rowNum = 0;
@@ -339,8 +340,6 @@ public class XLSCompareMain {
      */
     private static void copySheet(String sourceFile, XSSFSheet targetSheet) {
 
-        final int HEADER_LAST_ROW = 1;
-
         class Group { // Item for rows grouping
             private int start;
             private int end;
@@ -355,7 +354,7 @@ public class XLSCompareMain {
         }
 
         ArrayList<Group> groups = new ArrayList<>();
-        // groups.add(new Group(3, 22, 1));
+        // groups.add(new Group(3, 22, 1)); // Mock data
         // groups.add(new Group(4, 7, 2));
         // groups.add(new Group(13, 14, 2));
         // groups.add(new Group(17, 17, 2));
@@ -379,7 +378,7 @@ public class XLSCompareMain {
 
                     int specifiedOutlineLevel = (int) sourceSheet.getRow(i).getCell(0).getNumericCellValue();
                     if (outlineLevel + 1 != specifiedOutlineLevel) {
-                        System.out.println("Error in row " + i + ". Real row outline level " + (outlineLevel + 1) + " doesn't suite with level has specified in first column: " + specifiedOutlineLevel);
+                        System.out.println("ERROR in row " + (i + 1) + ". Real row outline level " + (outlineLevel + 1) + " doesn't suite with level has specified in first column: " + specifiedOutlineLevel);
                     }
 
                     if (oldOutlineLevel != outlineLevel) {

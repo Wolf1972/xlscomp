@@ -80,7 +80,7 @@ public class Requirement {
             if (cells > 15) questions = row.getCell(15).getStringCellValue(); // Work questions for requirement
         }
         catch (Exception e) {
-            System.out.println("Error while loading row " + row.getRowNum());
+            System.out.println("ERROR while loading row " + (row.getRowNum() + 1) + ": " + e.getMessage());
         }
     }
 
