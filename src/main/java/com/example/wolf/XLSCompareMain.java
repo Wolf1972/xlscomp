@@ -22,8 +22,8 @@ public class XLSCompareMain {
 
         String dir = System.getProperty("user.dir");
         String oldName = dir + "\\data\\old.xlsx";
-        String newName = dir + ".\\data\\new.xlsx";
-        String resultName = dir + ".\\data\\result.xlsx";
+        String newName = dir + "\\data\\new.xlsx";
+        String resultName = dir + "\\data\\result.xlsx";
 
         if (args.length >= 3) {
             oldName = args[0];
@@ -81,7 +81,7 @@ public class XLSCompareMain {
 
             System.out.println("Compared.");
 
-            outResult(oldName, newName, resultName, oldMap, newMap, addedMap, deletedMap);
+            outResult(oldName, newName, resultName, addedMap, deletedMap);
 
         }
         catch (IOException e) {
@@ -103,11 +103,6 @@ public class XLSCompareMain {
         XSSFWorkbook book = new XSSFWorkbook(new FileInputStream(file));
         XSSFSheet sheet = book.getSheetAt(0);
 
-        int oldLevel = 0;
-        String oldName = "";
-        ArrayList<String> path = new ArrayList<>();
-        path.add("\\");
-
         int lastRow = sheet.getLastRowNum();
 
         for (int rowNum = 0; rowNum <= lastRow; rowNum++) {
@@ -117,54 +112,11 @@ public class XLSCompareMain {
             XSSFRow row = sheet.getRow(rowNum);
             if (row == null) break;
 
-            int level = 0;
-            String name = "";
-
-            String currentPath = printPath(path);
-
-            if (row.getCell(0).getCellType() == CellType.NUMERIC) {
-                level = (int) row.getCell(0).getNumericCellValue();
-            }
-
-            if (row.getCell(1).getCellType() == CellType.STRING) {
-                name = row.getCell(1).getStringCellValue();
-            }
-
-            if (level == 0) {
-                if (name.length() != 0) {
-                    System.out.println("ERROR. Row " + (rowNum + 1) + " has no level but name with value: " + name);
-                }
-                break;
-            }
-
-            if (level != oldLevel) {
-                if (level > oldLevel) {
-                    if (level - oldLevel > 1) {
-                        System.out.println("ERROR. Row " + (rowNum + 1) + " has level " + level + ". It's not suitable for previous row level " + oldLevel);
-                        break;
-                    } else {
-                        if (oldName.length() > 0) path.add(oldName);
-                    }
-                }
-                else  {
-                    for (int i = oldLevel; i > level; i--) {
-                        path.remove(i - 1);
-                    }
-                }
-                oldLevel = level;
-                currentPath = printPath(path);
-            }
-
             Requirement req = new Requirement();
-            req.id = currentPath + "|" + name;
             req.loadFromRow(row);
             array.put(req.id, req);
 
 //            System.out.println("Row: " + rowNum + ": " + level + ": " + name + " | " + currentPath);
-
-            oldName = name;
-
-            if (level < 1) break;
 
         }
 
@@ -179,13 +131,10 @@ public class XLSCompareMain {
      * @param oldFileName - old file name
      * @param newFileName - new file name for compare
      * @param resultFileName - file name for results
-     * @param oldMap - map with source data
-     * @param newMap - map with data for compare
      * @param addedMap - map with added rows
      * @param deletedMap - map with deleted rows
      */
     private static void outResult(String oldFileName, String newFileName, String resultFileName,
-                                  LinkedHashMap<String, Requirement> oldMap, LinkedHashMap<String, Requirement> newMap,
                                   LinkedHashMap<String, Requirement> addedMap, LinkedHashMap<String, Requirement> deletedMap) {
 
         XSSFWorkbook book = new XSSFWorkbook();
@@ -196,6 +145,7 @@ public class XLSCompareMain {
                 System.out.println("+++ Added rows: " + addedMap.size() + " +++");
                 XSSFSheet oldSheet = book.createSheet("Old");
                 copySheet(oldFileName, oldSheet);
+                if (deletedMap.size() > 0) markOneSheet(oldSheet, deletedMap, true);
                 XSSFSheet addSheet = book.createSheet("Added");
                 outOneDiffSheet(addSheet, addedMap);
             } else {
@@ -205,6 +155,7 @@ public class XLSCompareMain {
             if (deletedMap.size() > 0) {
                 XSSFSheet newSheet = book.createSheet("New");
                 copySheet(newFileName, newSheet);
+                if (addedMap.size() > 0) markOneSheet(newSheet, addedMap, false);
                 XSSFSheet delSheet = book.createSheet("Deleted");
                 System.out.println("--- Deleted rows: " + deletedMap.size() + "---");
                 outOneDiffSheet(delSheet, deletedMap);
@@ -233,6 +184,72 @@ public class XLSCompareMain {
             item.getValue().saveToRow(row);
             rowNum++;
         }
+    }
+
+    /**
+     * Mark rows in specified sheet that contains in specified map. Mark style depends on isDeleted flag
+     * @param sheet - sheet to mark
+     * @param array - array with specified rows
+     * @param isDeleted - when true rows mark as strikeout (deleted), when false rows mark as red (inserted)
+     */
+    private static void markOneSheet(XSSFSheet sheet, LinkedHashMap<String, Requirement> array, boolean isDeleted) {
+
+        int lastRow = sheet.getLastRowNum();
+        int count = 0;
+        Requirement req = new Requirement();
+
+        // Common styles for all group levels (with outline levels)
+        HashMap<Integer, ArrayList<XSSFCellStyle>> groupStyles = new HashMap<>();
+
+        for (int i = 0; i <= lastRow; i++) {
+
+            if (i <= HEADER_LAST_ROW) continue; // Skip header
+
+            XSSFRow row = sheet.getRow(i);
+            req.loadFromRow(row);
+
+            ArrayList<XSSFCellStyle> styles = new ArrayList<>(); // Styles for current row
+
+            int outlineLevel = row.getOutlineLevel();
+
+            if (array.containsKey(req.id)) {
+
+                if (!groupStyles.containsKey(outlineLevel)) {
+                    // Styles for row with unknown outline level
+                    // Copy style from existing cell and correct: all styles after specified row are common - takes it from array
+                    for (int j = 0; j < row.getLastCellNum(); j++) {
+                        XSSFCell cell = row.getCell(j);
+                        XSSFCellStyle newCellStyle = sheet.getWorkbook().createCellStyle();
+                        newCellStyle.cloneStyleFrom(cell.getCellStyle());
+                        Font font = sheet.getWorkbook().createFont();
+                        if (isDeleted) {
+                            font.setBold(true);
+                            font.setStrikeout(true);
+                            font.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
+                        }
+                        else {
+                            font.setBold(true);
+                            font.setColor(IndexedColors.RED.getIndex());
+                        }
+                        newCellStyle.setFont(font);
+                        styles.add(newCellStyle);
+                    }
+//                    System.out.println("Create cell style for outline " + outlineLevel);
+                    groupStyles.put(outlineLevel, styles);
+                }
+
+                if (groupStyles.containsKey(outlineLevel)) {
+//                    System.out.println("Change cell style for row " + (row.getRowNum() + 1));
+                    count++;
+                    for (int j = 0; j < row.getLastCellNum(); j++) {
+                        XSSFCell cell = row.getCell(j);
+                        styles = groupStyles.get(outlineLevel);
+                        if (j < styles.size()) cell.setCellStyle(styles.get(j));
+                    }
+                }
+            }
+        }
+//        System.out.println("Change style for " + count + " rows.");
     }
 
     /**
