@@ -1,24 +1,25 @@
 package com.example.wolf;
 
 import org.apache.poi.ss.usermodel.CellType;
-import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 
 public class Requirement {
 
+    static final int HEADER_LAST_ROW = 1;
+
     String id; // Requirement id
-    Long level; // Requirement level
-    String name; // Requirement
-    String priority; // Requirement priority
-    String done; // Requirement has realised
-    String reference; // Requirement from other source (MarxxWeb)
-    String integration; // Integration requirement
-    String comment; // Comment for requirement
-    String linked; // Linked requirement
-    String version; // Plan to realised in version
-    String release; // Plan to realized in release
-    String questions; // Work questions for requirement
+    private Long level; // Requirement level
+    private String name; // Requirement
+    private String priority; // Requirement priority
+    private String done; // Requirement has realised
+    private String reference; // Requirement from other source (MarxxWeb)
+    private String integration; // Integration requirement
+    private String comment; // Comment for requirement
+    private String linked; // Linked requirement
+    private String version; // Plan to realised in version
+    private String release; // Plan to realized in release
+    private String questions; // Work questions for requirement
 
     @Override
     public boolean equals(Object o) {
@@ -62,7 +63,7 @@ public class Requirement {
      * Fills object fields from XLSX row
      * @param row - Excel XLSX row
      */
-    public void loadFromRow(XSSFRow row) {
+    void loadFromRow(XSSFRow row) {
         int cells = row.getLastCellNum();
 
         if (cells > 0) level = safeLoadInteger(row, 0); // Requirement level
@@ -120,7 +121,7 @@ public class Requirement {
      * @param column - column number (starts from 0)
      * @return - string
      */
-    public String safeLoadString(XSSFRow row, int column) {
+    private String safeLoadString(XSSFRow row, int column) {
         String result = "";
 
         if (row != null) {
@@ -156,7 +157,7 @@ public class Requirement {
      * @param column - column number (starts from 0)
      * @return - long value
      */
-    public Long safeLoadInteger(XSSFRow row, int column) {
+    private Long safeLoadInteger(XSSFRow row, int column) {
         Long result = 0L;
 
         if (row != null) {
@@ -173,7 +174,7 @@ public class Requirement {
                 } else if (type == CellType.FORMULA) {
                     // Do nothing;
                 } else if (type == CellType.NUMERIC) {
-                    result = (long) Math.round(cell.getNumericCellValue());
+                    result = Math.round(cell.getNumericCellValue());
                 } else if (type == CellType.STRING) {
                     result = Long.parseLong(cell.getStringCellValue());
                 }

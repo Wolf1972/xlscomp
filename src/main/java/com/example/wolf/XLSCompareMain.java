@@ -1,6 +1,5 @@
 package com.example.wolf;
 
-import org.apache.poi.ss.formula.functions.Column;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.*;
@@ -14,8 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class XLSCompareMain {
-
-    public static final int HEADER_LAST_ROW = 1;
 
     public static void main (String[] args) {
         System.out.println("Trying to compare XLSX with requirements hierarchy.");
@@ -35,7 +32,7 @@ public class XLSCompareMain {
             System.out.println("You didn't define any parameter, try to default names...");
             System.out.println("Current directory: " + dir);
         }
-
+        System.out.println();
         doCompare(oldName, newName, resultName);
     }
 
@@ -83,6 +80,8 @@ public class XLSCompareMain {
 
             outResult(oldName, newName, resultName, addedMap, deletedMap);
 
+            System.out.println("Done.");
+
         }
         catch (IOException e) {
             System.out.println("XLSX file read error: " + fileName);
@@ -94,7 +93,7 @@ public class XLSCompareMain {
      * Reads one Excel file (first sheet)
      * @param file - file name
      * @return - array with sheet data
-     * @throws IOException
+     * @throws IOException - may throws file reading errors
      */
     private static LinkedHashMap<String, Requirement> readFromExcel(String file) throws IOException {
 
@@ -107,7 +106,7 @@ public class XLSCompareMain {
 
         for (int rowNum = 0; rowNum <= lastRow; rowNum++) {
 
-            if (rowNum <= HEADER_LAST_ROW) continue; // Skip header
+            if (rowNum <= Requirement.HEADER_LAST_ROW) continue; // Skip header
 
             XSSFRow row = sheet.getRow(rowNum);
             if (row == null) break;
@@ -116,14 +115,11 @@ public class XLSCompareMain {
             req.loadFromRow(row);
             array.put(req.id, req);
 
-//            System.out.println("Row: " + rowNum + ": " + level + ": " + name + " | " + currentPath);
-
         }
 
         book.close();
 
         return array;
-
     }
 
     /**
@@ -142,7 +138,7 @@ public class XLSCompareMain {
         if (addedMap.size() > 0 || deletedMap.size() > 0) {
 
             if (addedMap.size() > 0) {
-                System.out.println("+++ Added rows: " + addedMap.size() + " +++");
+                System.out.println("+ Added rows: " + addedMap.size());
                 XSSFSheet oldSheet = book.createSheet("Old");
                 copySheet(oldFileName, oldSheet);
                 if (deletedMap.size() > 0) markOneSheet(oldSheet, deletedMap, true);
@@ -157,7 +153,7 @@ public class XLSCompareMain {
                 copySheet(newFileName, newSheet);
                 if (addedMap.size() > 0) markOneSheet(newSheet, addedMap, false);
                 XSSFSheet delSheet = book.createSheet("Deleted");
-                System.out.println("--- Deleted rows: " + deletedMap.size() + "---");
+                System.out.println("- Deleted rows: " + deletedMap.size());
                 outOneDiffSheet(delSheet, deletedMap);
             } else {
                 System.out.println("There are no deleted rows.");
@@ -173,29 +169,14 @@ public class XLSCompareMain {
     }
 
     /**
-     * Fills one Excel sheet from specified map one to one
-     * @param sheet - Excel sheet
-     * @param array - map to fill sheet
-     */
-    private static void outOneSheet(XSSFSheet sheet, LinkedHashMap<String, Requirement> array) {
-        int rowNum = 0;
-        for (Map.Entry<String, Requirement> item : array.entrySet()) {
-            XSSFRow row = sheet.createRow(rowNum);
-            item.getValue().saveToRow(row);
-            rowNum++;
-        }
-    }
-
-    /**
-     * Mark rows in specified sheet that contains in specified map. Mark style depends on isDeleted flag
+     * Mark rows in specified sheet according requirements in specified map. Mark style depends on isDeleted flag
      * @param sheet - sheet to mark
      * @param array - array with specified rows
-     * @param isDeleted - when true rows mark as strikeout (deleted), when false rows mark as red (inserted)
+     * @param isDeleted - when true rows mark as grey strikeout (deleted), when false - mark as red (inserted)
      */
     private static void markOneSheet(XSSFSheet sheet, LinkedHashMap<String, Requirement> array, boolean isDeleted) {
 
         int lastRow = sheet.getLastRowNum();
-        int count = 0;
         Requirement req = new Requirement();
 
         // Common styles for all group levels (with outline levels)
@@ -203,7 +184,7 @@ public class XLSCompareMain {
 
         for (int i = 0; i <= lastRow; i++) {
 
-            if (i <= HEADER_LAST_ROW) continue; // Skip header
+            if (i <= Requirement.HEADER_LAST_ROW) continue; // Skip header
 
             XSSFRow row = sheet.getRow(i);
             req.loadFromRow(row);
@@ -234,13 +215,10 @@ public class XLSCompareMain {
                         newCellStyle.setFont(font);
                         styles.add(newCellStyle);
                     }
-//                    System.out.println("Create cell style for outline " + outlineLevel);
                     groupStyles.put(outlineLevel, styles);
                 }
 
                 if (groupStyles.containsKey(outlineLevel)) {
-//                    System.out.println("Change cell style for row " + (row.getRowNum() + 1));
-                    count++;
                     for (int j = 0; j < row.getLastCellNum(); j++) {
                         XSSFCell cell = row.getCell(j);
                         styles = groupStyles.get(outlineLevel);
@@ -249,7 +227,6 @@ public class XLSCompareMain {
                 }
             }
         }
-//        System.out.println("Change style for " + count + " rows.");
     }
 
     /**
@@ -266,9 +243,9 @@ public class XLSCompareMain {
         int rowNum = 0;
         int level = 0;
         String oldPathStr = "";
-        String[] oldPathArr = {};
+//        String[] oldPathArr = {};
         for (Map.Entry<String, Requirement> item : array.entrySet()) {
-            String pathStr = getPath(item.getKey());
+            String pathStr = getOnlyPath(item.getKey());
             if (!pathStr.equals(oldPathStr)) {
                 String[] pathArr = pathStr.split("\\\\");
                 level = 0;
@@ -290,33 +267,15 @@ public class XLSCompareMain {
                     level = i;
                 }
                 oldPathStr = pathStr;
-                oldPathArr = pathArr;
+//                oldPathArr = pathArr;
             }
             XSSFRow row = sheet.createRow(rowNum);
             XSSFCell path = row.createCell(0);
             path.setCellValue(level + 1);
             XSSFCell name = row.createCell(1);
-            name.setCellValue(getName(item.getKey()));
+            name.setCellValue(getOnlyName(item.getKey()));
             rowNum++;
-            // System.out.println(path + " > " + name);
         }
-    }
-
-    /**
-     * Builds path string from array with hierarchical rows
-     * @param path - array with path
-     * @return - string with path divided by "\"
-     */
-    private static String printPath(ArrayList<String> path) {
-        StringBuilder str = new StringBuilder();
-        for (int i = 0; i < path.size(); i++) {
-            if (i > 1) str.append("\\");
-            String node = path.get(i);
-            if (node.contains("\\") && i > 1) str.append("\"");
-            str.append(path.get(i));
-            if (node.contains("\\") && i > 1) str.append("\"");
-        }
-        return str.toString();
     }
 
     /**
@@ -324,7 +283,7 @@ public class XLSCompareMain {
      * @param item - path with name
      * @return - only name
      */
-    private static String getName(String item) {
+    private static String getOnlyName(String item) {
         String name = "";
         if (item != null) {
             int pos = item.lastIndexOf('|');
@@ -338,7 +297,7 @@ public class XLSCompareMain {
      * @param item - path with name
      * @return - only path
      */
-    private static String getPath(String item) {
+    private static String getOnlyPath(String item) {
         String name = "";
         if (item != null) {
             int pos = item.lastIndexOf('|');
@@ -362,7 +321,7 @@ public class XLSCompareMain {
             private int end;
             private int level;
             private boolean closed;
-            Group(int start, int end, int level) {
+            private Group(int start, int end, int level) {
                 this.start = start;
                 this.end = end;
                 this.level = level;
@@ -371,10 +330,6 @@ public class XLSCompareMain {
         }
 
         ArrayList<Group> groups = new ArrayList<>();
-        // groups.add(new Group(3, 22, 1)); // Mock data
-        // groups.add(new Group(4, 7, 2));
-        // groups.add(new Group(13, 14, 2));
-        // groups.add(new Group(17, 17, 2));
 
         // Common styles for all group levels (with outline levels)
         HashMap<Integer, ArrayList<XSSFCellStyle>> groupStyles = new HashMap<>();
@@ -389,9 +344,8 @@ public class XLSCompareMain {
             for (int i = 0; i <= lastRow; i++) {
 
                 int outlineLevel = sourceSheet.getRow(i).getOutlineLevel();
-//                System.out.println("Copying row " + i + " Outline: " + outlineLevel);
 
-                if (i > HEADER_LAST_ROW && outlineLevel >= 0) {
+                if (i > Requirement.HEADER_LAST_ROW && outlineLevel >= 0) {
 
                     int specifiedOutlineLevel = (int) sourceSheet.getRow(i).getCell(0).getNumericCellValue();
                     if (outlineLevel + 1 != specifiedOutlineLevel) {
@@ -417,7 +371,7 @@ public class XLSCompareMain {
 
                 ArrayList<XSSFCellStyle> styles = new ArrayList<>(); // Styles for current row
 
-                if (i <= HEADER_LAST_ROW || !groupStyles.containsKey(outlineLevel)) {
+                if (i <= Requirement.HEADER_LAST_ROW || !groupStyles.containsKey(outlineLevel)) {
                     // Styles for header row or row with unknown outline level
                     // Copy style from old cell and apply to new cell: all styles after specified row are common - takes it from array
                     for (int j = 0; j < sourceSheet.getRow(i).getLastCellNum(); j++) {
@@ -426,7 +380,7 @@ public class XLSCompareMain {
                         newCellStyle.cloneStyleFrom(cell.getCellStyle());
                         styles.add(newCellStyle);
                     }
-                    if (i > HEADER_LAST_ROW) { // For regular rows with requirement add common style for outline level
+                    if (i > Requirement.HEADER_LAST_ROW) { // For regular rows with requirement add common style for outline level
                         groupStyles.put(outlineLevel, styles);
                     }
                 }
@@ -491,7 +445,6 @@ public class XLSCompareMain {
 
             // If the old cell is null jump to next cell
             if (oldCell == null) {
-                newCell = null;
                 continue;
             }
 
