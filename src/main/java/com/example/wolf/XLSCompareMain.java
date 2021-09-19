@@ -137,27 +137,30 @@ public class XLSCompareMain {
 
         if (addedMap.size() > 0 || deletedMap.size() > 0) {
 
-            if (addedMap.size() > 0) {
-                System.out.println("+ Added rows: " + addedMap.size());
-                XSSFSheet oldSheet = book.createSheet("Old");
-                copySheet(oldFileName, oldSheet);
-                if (deletedMap.size() > 0) markOneSheet(oldSheet, deletedMap, true);
-                XSSFSheet addSheet = book.createSheet("Added");
-                outOneDiffSheet(addSheet, addedMap);
-            } else {
-                System.out.println("There are no added rows.");
-            }
-
+            XSSFSheet oldSheet = book.createSheet("Old");
+            copySheet(oldFileName, oldSheet);
             if (deletedMap.size() > 0) {
-                XSSFSheet newSheet = book.createSheet("New");
-                copySheet(newFileName, newSheet);
-                if (addedMap.size() > 0) markOneSheet(newSheet, addedMap, false);
+                markOneSheet(oldSheet, deletedMap, true);
                 XSSFSheet delSheet = book.createSheet("Deleted");
                 System.out.println("- Deleted rows: " + deletedMap.size());
                 outOneDiffSheet(delSheet, deletedMap);
-            } else {
+            }
+            else {
                 System.out.println("There are no deleted rows.");
             }
+
+            XSSFSheet newSheet = book.createSheet("New");
+            copySheet(newFileName, newSheet);
+            if (addedMap.size() > 0) {
+                markOneSheet(newSheet, addedMap, false);
+                XSSFSheet addSheet = book.createSheet("Added");
+                System.out.println("+ Added rows: " + addedMap.size());
+                outOneDiffSheet(addSheet, addedMap);
+            }
+            else {
+                System.out.println("There are no added rows.");
+            }
+
             try {
                 book.write(new FileOutputStream(resultFileName));
                 book.close();
@@ -443,6 +446,10 @@ public class XLSCompareMain {
             XSSFCell oldCell = sourceRow.getCell(i);
             XSSFCell newCell = newRow.createCell(i);
 
+            // Do not copy service columns
+            if (i > Requirement.LAST_COMMON_COLUMN) {
+                continue;
+            }
             // If the old cell is null jump to next cell
             if (oldCell == null) {
                 continue;

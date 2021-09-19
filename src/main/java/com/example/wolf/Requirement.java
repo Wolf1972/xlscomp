@@ -6,7 +6,8 @@ import org.apache.poi.xssf.usermodel.XSSFRow;
 
 public class Requirement {
 
-    static final int HEADER_LAST_ROW = 1;
+    static final int HEADER_LAST_ROW = 1; // Header row index (starts from 0)
+    static final int LAST_COMMON_COLUMN = 15; // Column index (starts from 0) - to prevent copying service columns
 
     String id; // Requirement id
     private Long level; // Requirement level
