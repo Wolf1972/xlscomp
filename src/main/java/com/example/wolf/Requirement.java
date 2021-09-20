@@ -7,7 +7,7 @@ import org.apache.poi.xssf.usermodel.XSSFRow;
 public class Requirement {
 
     static final int HEADER_LAST_ROW = 1; // Header row index (starts from 0)
-    static final int LAST_COMMON_COLUMN = 15; // Column index (starts from 0) - to prevent copying service columns
+    static final int LAST_COMMON_COLUMN = 12; // Last copying column index (starts from 0) - to prevent copying service columns
 
     String id; // Requirement id
     private Long level; // Requirement level
@@ -18,9 +18,13 @@ public class Requirement {
     private String integration; // Integration requirement
     private String comment; // Comment for requirement
     private String linked; // Linked requirement
-    private String version; // Plan to realised in version
-    private String release; // Plan to realized in release
-    private String questions; // Work questions for requirement
+    private String version; // Plan to realised in version (13)
+    private String release; // Plan to realized in release (14)
+    private String questions; // Work questions for requirement (15)
+    private String source_req; // Requirement in source (16)
+    private String customize; // Requirement realizes by customize (17)
+    private String tt; // Team track task (18)
+    private String trello; // Trello task (19)
 
     @Override
     public boolean equals(Object o) {
@@ -40,7 +44,11 @@ public class Requirement {
         if (linked != null ? !linked.equals(that.linked) : that.linked != null) return false;
         if (version != null ? !version.equals(that.version) : that.version != null) return false;
         if (release != null ? !release.equals(that.release) : that.release != null) return false;
-        return questions != null ? questions.equals(that.questions) : that.questions == null;
+        if (questions != null ? !questions.equals(that.questions) : that.questions != null) return false;
+        if (source_req != null ? !source_req.equals(that.source_req) : that.source_req != null) return false;
+        if (customize != null ? !customize.equals(that.customize) : that.customize != null) return false;
+        if (tt != null ? !tt.equals(that.tt) : that.tt != null) return false;
+        return trello != null ? trello.equals(that.trello) : that.trello == null;
     }
 
     @Override
@@ -57,6 +65,10 @@ public class Requirement {
         result = 31 * result + (version != null ? version.hashCode() : 0);
         result = 31 * result + (release != null ? release.hashCode() : 0);
         result = 31 * result + (questions != null ? questions.hashCode() : 0);
+        result = 31 * result + (source_req != null ? source_req.hashCode() : 0);
+        result = 31 * result + (customize != null ? customize.hashCode() : 0);
+        result = 31 * result + (tt != null ? tt.hashCode() : 0);
+        result = 31 * result + (trello != null ? trello.hashCode() : 0);
         return result;
     }
 
@@ -84,6 +96,10 @@ public class Requirement {
         if (cells > 13) version = safeLoadString(row,13); // Plan to realised in version
         if (cells > 14) release = safeLoadString(row, 14); // Plan to realized in release
         if (cells > 15) questions = safeLoadString(row,15); // Work questions for requirement
+        if (cells > 16) source_req = safeLoadString(row,16); // Requirement in source
+        if (cells > 17) customize = safeLoadString(row,17); // Requirement realizes by customize
+        if (cells > 18) tt = safeLoadString(row,18); // Team track task
+        if (cells > 19) trello = safeLoadString(row,19); // Trello task
 
         // Id evaluation - get all parent nodes
         int outlineLevel = row.getOutlineLevel();
@@ -205,6 +221,10 @@ public class Requirement {
         cell = row.createCell(13); cell.setCellValue(version); // Plan to realised in version
         cell = row.createCell(14); cell.setCellValue(release); // Plan to realized in release
         cell = row.createCell(15); cell.setCellValue(questions); // Work questions for requirement
+        cell = row.createCell(16); cell.setCellValue(source_req); // Source requirement
+        cell = row.createCell(17); cell.setCellValue(customize); // Realizes by customize
+        cell = row.createCell(18); cell.setCellValue(tt); // Team track task
+        cell = row.createCell(19); cell.setCellValue(trello); // Trello task
     }
 
 }

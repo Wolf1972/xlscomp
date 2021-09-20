@@ -143,7 +143,8 @@ public class XLSCompareMain {
                 markOneSheet(oldSheet, deletedMap, true);
                 XSSFSheet delSheet = book.createSheet("Deleted");
                 System.out.println("- Deleted rows: " + deletedMap.size());
-                outOneDiffSheet(delSheet, deletedMap);
+                // outOneDiffSheet(delSheet, deletedMap);
+                copyOnly(oldSheet, delSheet, deletedMap);
             }
             else {
                 System.out.println("There are no deleted rows.");
@@ -228,6 +229,87 @@ public class XLSCompareMain {
                         if (j < styles.size()) cell.setCellStyle(styles.get(j));
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Copies only rows contain in specified map with all parent rows to specified sheet
+     * @param sourceSheet - source sheet
+     * @param targetSheet - source sheet
+     * @param array - array with specified rows
+     */
+    private static void copyOnly(XSSFSheet sourceSheet, XSSFSheet targetSheet, LinkedHashMap<String, Requirement> array) {
+
+        int lastRow = sourceSheet.getLastRowNum();
+        Requirement req = new Requirement();
+        LinkedHashMap<Integer, String> parents = new LinkedHashMap<>(); // Parent nodes (outline and ids)
+        LinkedHashMap<Integer, Integer> parentRows = new LinkedHashMap<>(); // Rows for parent nodes (outline and row numbers)
+
+        // Common styles for all group levels (with outline levels)
+        HashMap<Integer, ArrayList<XSSFCellStyle>> groupStyles = new HashMap<>();
+
+        int oldRowNum = 0;
+        int newRowNum = 0;
+
+        for (int i = 0; i <= lastRow; i++) {
+
+            if (i <= Requirement.HEADER_LAST_ROW) continue; // Skip header
+
+            XSSFRow row = sourceSheet.getRow(i);
+            req.loadFromRow(row);
+
+            if (array.containsKey(req.id)) {
+
+                ArrayList<XSSFCellStyle> styles = new ArrayList<>(); // Styles for current row
+
+                // Try to get all parent nodes
+                int outlineLevel = row.getOutlineLevel();
+                oldRowNum = i;
+                for (int j = outlineLevel - 1; j >= 0; j--) {
+                    while (true) {
+                        oldRowNum--;
+                        if (oldRowNum < 0) {
+                            System.out.println("ERROR. Can't find full path for row " + (row.getRowNum() + 1));
+                            break;
+                        }
+                        XSSFRow prevRow = row.getSheet().getRow(oldRowNum);
+                        int prevOutlineLevel = prevRow.getOutlineLevel();
+                        if (prevOutlineLevel == j) {
+                            req.loadFromRow(prevRow);
+                            parents.put(j, req.id);
+                            parentRows.put(j, oldRowNum);
+                            break;
+                        } else if (prevOutlineLevel < j) {
+                            System.out.println("ERROR. Outline levels sequence violation for row " + (row.getRowNum() + 1));
+                            break;
+                        }
+                    }
+                }
+
+                for (Map.Entry<Integer, Integer> item : parentRows.entrySet()) {
+                    oldRowNum = item.getValue();
+                    row = sourceSheet.getRow(oldRowNum);
+                    outlineLevel = row.getOutlineLevel();
+                    if (!groupStyles.containsKey(outlineLevel)) {
+                        // Styles for row with unknown outline level
+                        // Copy style from existing cell and correct: all styles after specified row are common - takes it from array
+                        for (int j = 0; j < row.getLastCellNum(); j++) {
+                            XSSFCell cell = row.getCell(j);
+                            XSSFCellStyle newCellStyle = targetSheet.getWorkbook().createCellStyle();
+                            newCellStyle.cloneStyleFrom(cell.getCellStyle());
+                            Font font = targetSheet.getWorkbook().createFont();
+                            font.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
+                            newCellStyle.setFont(font);
+                            styles.add(newCellStyle);
+                        }
+                        groupStyles.put(outlineLevel, styles);
+                    }
+                    copyRow(sourceSheet, targetSheet, oldRowNum, newRowNum, groupStyles.get(outlineLevel));
+                    newRowNum++;
+                }
+                copyRow(sourceSheet, targetSheet, i, newRowNum, null);
+                newRowNum++;
             }
         }
     }
@@ -455,7 +537,7 @@ public class XLSCompareMain {
                 continue;
             }
 
-            if (i < columnStyles.size()) {
+            if (columnStyles != null && i < columnStyles.size()) {
                 XSSFCellStyle newCellStyle = columnStyles.get(i);
                 newCell.setCellStyle(newCellStyle);
             }
