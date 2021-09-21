@@ -144,7 +144,7 @@ public class XLSCompareMain {
                 XSSFSheet delSheet = book.createSheet("Deleted");
                 System.out.println("- Deleted rows: " + deletedMap.size());
                 // outOneDiffSheet(delSheet, deletedMap);
-                copyOnly(oldSheet, delSheet, deletedMap);
+                copySheetFilter(oldSheet, delSheet, deletedMap);
             }
             else {
                 System.out.println("There are no deleted rows.");
@@ -234,51 +234,64 @@ public class XLSCompareMain {
     }
 
     /**
-     * Copies only rows contain in specified map with all parent rows to specified sheet
+     * Copies only rows that contain in specified filter map and with all parent rows to specified sheet
      * @param sourceSheet - source sheet
      * @param targetSheet - source sheet
-     * @param array - array with specified rows
+     * @param filterMap - array with specified rows
      */
-    private static void copyOnly(XSSFSheet sourceSheet, XSSFSheet targetSheet, LinkedHashMap<String, Requirement> array) {
+    private static void copySheetFilter(XSSFSheet sourceSheet, XSSFSheet targetSheet, LinkedHashMap<String, Requirement> filterMap) {
 
         int lastRow = sourceSheet.getLastRowNum();
         Requirement req = new Requirement();
         LinkedHashMap<Integer, String> parents = new LinkedHashMap<>(); // Parent nodes (outline and ids)
         LinkedHashMap<Integer, Integer> parentRows = new LinkedHashMap<>(); // Rows for parent nodes (outline and row numbers)
 
-        // Common styles for all group levels (with outline levels)
-        HashMap<Integer, ArrayList<XSSFCellStyle>> groupStyles = new HashMap<>();
+        // Common styles for suitable rows with all outline levels
+        HashMap<Integer, ArrayList<XSSFCellStyle>> rowStyles = new HashMap<>();
+        // Styles for parent rows with all outline levels (will be corrected to GREY)
+        HashMap<Integer, ArrayList<XSSFCellStyle>> parentStyles = new HashMap<>();
 
-        int oldRowNum = 0;
         int newRowNum = 0;
 
-        for (int i = 0; i <= lastRow; i++) {
+        for (int i = 0; i <= lastRow; i++) { // View all source sheet
 
             if (i <= Requirement.HEADER_LAST_ROW) continue; // Skip header
 
             XSSFRow row = sourceSheet.getRow(i);
             req.loadFromRow(row);
 
-            if (array.containsKey(req.id)) {
+            if (filterMap.containsKey(req.id)) { // Suitable row?
 
-                ArrayList<XSSFCellStyle> styles = new ArrayList<>(); // Styles for current row
-
-                // Try to get all parent nodes
                 int outlineLevel = row.getOutlineLevel();
-                oldRowNum = i;
+
+                if (!rowStyles.containsKey(outlineLevel)) { // Fill styles map for suitable rows
+                    ArrayList<XSSFCellStyle> styles = new ArrayList<>();
+                    for (int j = 0; j < row.getLastCellNum(); j++) {
+                        XSSFCell cell = row.getCell(j);
+                        XSSFCellStyle newCellStyle = targetSheet.getWorkbook().createCellStyle();
+                        newCellStyle.cloneStyleFrom(cell.getCellStyle());
+                        Font font = targetSheet.getWorkbook().createFont();
+                        newCellStyle.setFont(font);
+                        styles.add(newCellStyle);
+                    }
+                    rowStyles.put(outlineLevel, styles);
+                }
+
+                // Try to get all parent nodes for one row suitable for filter
+                int parentRowNum = i;
                 for (int j = outlineLevel - 1; j >= 0; j--) {
                     while (true) {
-                        oldRowNum--;
-                        if (oldRowNum < 0) {
+                        parentRowNum--;
+                        if (parentRowNum < 0) {
                             System.out.println("ERROR. Can't find full path for row " + (row.getRowNum() + 1));
                             break;
                         }
-                        XSSFRow prevRow = row.getSheet().getRow(oldRowNum);
+                        XSSFRow prevRow = row.getSheet().getRow(parentRowNum);
                         int prevOutlineLevel = prevRow.getOutlineLevel();
                         if (prevOutlineLevel == j) {
                             req.loadFromRow(prevRow);
                             parents.put(j, req.id);
-                            parentRows.put(j, oldRowNum);
+                            parentRows.put(j, parentRowNum);
                             break;
                         } else if (prevOutlineLevel < j) {
                             System.out.println("ERROR. Outline levels sequence violation for row " + (row.getRowNum() + 1));
@@ -287,15 +300,16 @@ public class XLSCompareMain {
                     }
                 }
 
+                // Copy all parent rows and fill styles map for parent rows
                 for (Map.Entry<Integer, Integer> item : parentRows.entrySet()) {
-                    oldRowNum = item.getValue();
-                    row = sourceSheet.getRow(oldRowNum);
-                    outlineLevel = row.getOutlineLevel();
-                    if (!groupStyles.containsKey(outlineLevel)) {
-                        // Styles for row with unknown outline level
+                    parentRowNum = item.getValue();
+                    XSSFRow parentRow = sourceSheet.getRow(parentRowNum);
+                    int parentOutlineLevel = parentRow.getOutlineLevel();
+                    if (!parentStyles.containsKey(parentOutlineLevel)) {
+                        ArrayList<XSSFCellStyle> styles = new ArrayList<>();
                         // Copy style from existing cell and correct: all styles after specified row are common - takes it from array
-                        for (int j = 0; j < row.getLastCellNum(); j++) {
-                            XSSFCell cell = row.getCell(j);
+                        for (int j = 0; j < parentRow.getLastCellNum(); j++) {
+                            XSSFCell cell = parentRow.getCell(j);
                             XSSFCellStyle newCellStyle = targetSheet.getWorkbook().createCellStyle();
                             newCellStyle.cloneStyleFrom(cell.getCellStyle());
                             Font font = targetSheet.getWorkbook().createFont();
@@ -303,12 +317,13 @@ public class XLSCompareMain {
                             newCellStyle.setFont(font);
                             styles.add(newCellStyle);
                         }
-                        groupStyles.put(outlineLevel, styles);
+                        parentStyles.put(parentOutlineLevel, styles);
                     }
-                    copyRow(sourceSheet, targetSheet, oldRowNum, newRowNum, groupStyles.get(outlineLevel));
+                    copyRow(sourceSheet, targetSheet, parentRowNum, newRowNum, parentStyles.get(parentOutlineLevel));
                     newRowNum++;
                 }
-                copyRow(sourceSheet, targetSheet, i, newRowNum, null);
+                // Copy row suitable for filter
+                copyRow(sourceSheet, targetSheet, i, newRowNum, rowStyles.get(outlineLevel));
                 newRowNum++;
             }
         }
