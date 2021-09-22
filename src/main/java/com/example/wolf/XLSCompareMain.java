@@ -241,17 +241,18 @@ public class XLSCompareMain {
      */
     private static void copySheetFilter(XSSFSheet sourceSheet, XSSFSheet targetSheet, LinkedHashMap<String, Requirement> filterMap) {
 
-        int lastRow = sourceSheet.getLastRowNum();
-        Requirement req = new Requirement();
-        LinkedHashMap<Integer, String> parents = new LinkedHashMap<>(); // Parent nodes (outline and ids)
-        LinkedHashMap<Integer, Integer> parentRows = new LinkedHashMap<>(); // Rows for parent nodes (outline and row numbers)
+        LinkedHashMap<Integer, Requirement> parents = new LinkedHashMap<>(); // Rows for parent nodes (row numbers and requirements)
 
         // Common styles for suitable rows with all outline levels
         HashMap<Integer, ArrayList<XSSFCellStyle>> rowStyles = new HashMap<>();
         // Styles for parent rows with all outline levels (will be corrected to GREY)
         HashMap<Integer, ArrayList<XSSFCellStyle>> parentStyles = new HashMap<>();
 
-        int newRowNum = 0;
+        int newRowNum = 0; // Current row number in target sheet
+
+        Requirement req = new Requirement(); // Current requirement
+        Requirement parentReq = new Requirement(); // One of parent requirement (for iterations by parents)
+        int lastRow = sourceSheet.getLastRowNum();
 
         for (int i = 0; i <= lastRow; i++) { // View all source sheet
 
@@ -277,7 +278,7 @@ public class XLSCompareMain {
                     rowStyles.put(outlineLevel, styles);
                 }
 
-                // Try to get all parent nodes for one row suitable for filter
+                // Get all parent nodes for one row suitable for filter
                 int parentRowNum = i;
                 for (int j = outlineLevel - 1; j >= 0; j--) {
                     while (true) {
@@ -289,9 +290,8 @@ public class XLSCompareMain {
                         XSSFRow prevRow = row.getSheet().getRow(parentRowNum);
                         int prevOutlineLevel = prevRow.getOutlineLevel();
                         if (prevOutlineLevel == j) {
-                            req.loadFromRow(prevRow);
-                            parents.put(j, req.id);
-                            parentRows.put(j, parentRowNum);
+                            parentReq.loadFromRow(prevRow);
+                            parents.put(parentRowNum, parentReq); // TODO: same object
                             break;
                         } else if (prevOutlineLevel < j) {
                             System.out.println("ERROR. Outline levels sequence violation for row " + (row.getRowNum() + 1));
@@ -301,9 +301,9 @@ public class XLSCompareMain {
                 }
 
                 // Copy all parent rows and fill styles map for parent rows
-                for (Map.Entry<Integer, Integer> item : parentRows.entrySet()) {
-                    parentRowNum = item.getValue();
-                    XSSFRow parentRow = sourceSheet.getRow(parentRowNum);
+                for (Map.Entry<Integer, Requirement> item : parents.entrySet()) {
+                    parentReq = item.getValue();
+                    XSSFRow parentRow = sourceSheet.getRow(item.getKey());
                     int parentOutlineLevel = parentRow.getOutlineLevel();
                     if (!parentStyles.containsKey(parentOutlineLevel)) {
                         ArrayList<XSSFCellStyle> styles = new ArrayList<>();
