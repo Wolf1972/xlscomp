@@ -77,6 +77,10 @@ public class Requirement {
         return result;
     }
 
+    public Integer getRow() {
+        return row;
+    }
+
     /**
      * Fills object fields from XLSX row
      * @param xrow - Excel XLSX row
