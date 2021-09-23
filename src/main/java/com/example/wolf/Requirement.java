@@ -3,8 +3,14 @@ package com.example.wolf;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.apache.poi.xssf.usermodel.XSSFRow;
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-public class Requirement {
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.LinkedHashMap;
+
+public class Requirement extends BaseRequirement {
 
     static final int HEADER_LAST_ROW = 1; // Header row index (starts from 0)
     static final int LAST_COMMON_COLUMN = 12; // Last copying column index (starts from 0) - to prevent copying service columns
@@ -81,6 +87,18 @@ public class Requirement {
         return row;
     }
 
+    public String getReference() {
+        return reference;
+    }
+
+    public void setReference(String reference) {
+        this.reference = reference;
+    }
+
+    public void setRelease(String release) {
+        this.release = release;
+    }
+
     /**
      * Fills object fields from XLSX row
      * @param xrow - Excel XLSX row
@@ -145,77 +163,6 @@ public class Requirement {
     }
 
     /**
-     * Returns string from cell (even if column contains number or error)
-     * @param row - XLSX row
-     * @param column - column number (starts from 0)
-     * @return - string
-     */
-    private String safeLoadString(XSSFRow row, int column) {
-        String result = "";
-
-        if (row != null) {
-            try {
-                XSSFCell cell = row.getCell(column);
-                CellType type = cell.getCellType();
-                if (type == CellType.BLANK) {
-                    // Do nothing
-                } else if (type == CellType.BOOLEAN) {
-                    Boolean logical = cell.getBooleanCellValue();
-                    result = logical.toString();
-                } else if (type == CellType.ERROR) {
-                    result = cell.getErrorCellString();
-                } else if (type == CellType.FORMULA) {
-                    result = cell.getCellFormula();
-                } else if (type == CellType.NUMERIC) {
-                    Double number = cell.getNumericCellValue();
-                    result = number.toString();
-                } else if (type == CellType.STRING) {
-                    result = cell.getStringCellValue();
-                }
-            }
-            catch (Exception e) {
-                System.out.println("ERROR while loading row " + (row.getRowNum() + 1) + ", column " + column + ": " + e.getMessage());
-            }
-        }
-        return result;
-    }
-
-    /**
-     * Returns integer from cell (even if column contains string or error)
-     * @param row - XLSX row
-     * @param column - column number (starts from 0)
-     * @return - long value
-     */
-    private Integer safeLoadInteger(XSSFRow row, int column) {
-        Integer result = 0;
-
-        if (row != null) {
-            try {
-                XSSFCell cell = row.getCell(column);
-                CellType type = cell.getCellType();
-                if (type == CellType.BLANK) {
-                    // Do nothing
-                } else if (type == CellType.BOOLEAN) {
-                    Boolean logical = cell.getBooleanCellValue();
-                    result = logical ? 1 : 0;
-                } else if (type == CellType.ERROR) {
-                    // Do nothing;
-                } else if (type == CellType.FORMULA) {
-                    // Do nothing;
-                } else if (type == CellType.NUMERIC) {
-                    result = new Integer((int) Math.round(cell.getNumericCellValue()));
-                } else if (type == CellType.STRING) {
-                    result = Integer.parseInt(cell.getStringCellValue());
-                }
-            }
-            catch (Exception e) {
-                System.out.println("ERROR while loading row " + (row.getRowNum() + 1) + ", column " + (column + 1) + ": " + e.getMessage());
-            }
-        }
-        return result;
-    }
-
-    /**
      * Fills XLSX row from object
      * @param row - XLSX row
      */
@@ -237,6 +184,39 @@ public class Requirement {
         cell = row.createCell(17); cell.setCellValue(customize); // Realizes by customize
         cell = row.createCell(18); cell.setCellValue(tt); // Team track task
         cell = row.createCell(19); cell.setCellValue(trello); // Trello task
+    }
+
+    /**
+     * Reads one Excel file (first sheet)
+     * @param file - file name
+     * @return - array with sheet data
+     * @throws IOException - may throws file reading errors
+     */
+    static LinkedHashMap<String, Requirement> readFromExcel(String file) throws IOException {
+
+        LinkedHashMap<String, Requirement> array = new LinkedHashMap<>();
+
+        XSSFWorkbook book = new XSSFWorkbook(new FileInputStream(file));
+        XSSFSheet sheet = book.getSheetAt(0);
+
+        int lastRow = sheet.getLastRowNum();
+
+        for (int rowNum = 0; rowNum <= lastRow; rowNum++) {
+
+            if (rowNum <= Requirement.HEADER_LAST_ROW) continue; // Skip header
+
+            XSSFRow row = sheet.getRow(rowNum);
+            if (row == null) break;
+
+            Requirement req = new Requirement();
+            req.loadFromRow(row);
+            array.put(req.id, req);
+
+        }
+
+        book.close();
+
+        return array;
     }
 
 }

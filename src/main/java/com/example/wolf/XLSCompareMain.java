@@ -7,6 +7,8 @@ import org.apache.poi.xssf.usermodel.*;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 
 public class XLSCompareMain {
@@ -18,23 +20,33 @@ public class XLSCompareMain {
         String oldName = dir + "\\data\\old.xlsx";
         String newName = dir + "\\data\\new.xlsx";
         String resultName = dir + "\\data\\result.xlsx";
+        String mxwebName = dir + "\\data\\mxweb.xlsx";
 
-        if (args.length >= 3) {
+        if (args.length >= 4) {
+            oldName = args[0];
+            newName = args[1];
+            mxwebName = args[2];
+            resultName = args[3];
+        }
+        else if (args.length >= 3) {
             oldName = args[0];
             newName = args[1];
             resultName = args[2];
         }
         else {
             System.out.println("Usage: <old file> <new file to compare> <file with results>");
+            System.out.println("   or: <old file> <new file to compare> <mxweb file> <file with results>");
             System.out.println("You didn't define any parameter, try to default names...");
             System.out.println("Current directory: " + dir);
         }
         System.out.println();
         doCompare(oldName, newName, resultName);
+        if (Files.exists(Paths.get(mxwebName))) doMerge(newName, mxwebName, resultName);
+        System.out.println("Done.");
     }
 
     /**
-     * Compare procedure
+     * Compare requirements procedure
      * @param oldName - old file name
      * @param newName - new file name for compare
      * @param resultName - file name for result
@@ -44,14 +56,16 @@ public class XLSCompareMain {
         String fileName = "?";
         try {
 
+            System.out.println("Trying to compare...");
+
             fileName = oldName;
             System.out.println("Loading old file " + fileName);
-            LinkedHashMap<String, Requirement> oldMap = readFromExcel(fileName);
+            LinkedHashMap<String, Requirement> oldMap = Requirement.readFromExcel(fileName);
             System.out.println("Rows loaded: " + oldMap.size());
 
             fileName = newName;
             System.out.println("Loading new file " + fileName);
-            LinkedHashMap<String, Requirement> newMap = readFromExcel(fileName);
+            LinkedHashMap<String, Requirement> newMap = Requirement.readFromExcel(fileName);
             System.out.println("Rows loaded: " + newMap.size());
 
             LinkedHashMap<String, Requirement> deletedMap = new LinkedHashMap<>();
@@ -75,9 +89,7 @@ public class XLSCompareMain {
 
             System.out.println("Compared.");
 
-            outResult(oldName, newName, resultName, addedMap, deletedMap);
-
-            System.out.println("Done.");
+            outCompareResult(oldName, newName, resultName, addedMap, deletedMap);
 
         }
         catch (IOException e) {
@@ -87,36 +99,71 @@ public class XLSCompareMain {
     }
 
     /**
-     * Reads one Excel file (first sheet)
-     * @param file - file name
-     * @return - array with sheet data
-     * @throws IOException - may throws file reading errors
+     * Merge requirements procedure
+     * @param newName - new file name
+     * @param mxwebName - new file name for merge
+     * @param resultName - file name for result
      */
-    private static LinkedHashMap<String, Requirement> readFromExcel(String file) throws IOException {
+    private static void doMerge(String newName, String mxwebName, String resultName) {
 
-        LinkedHashMap<String, Requirement> array = new LinkedHashMap<>();
+        String fileName = "?";
+        try {
 
-        XSSFWorkbook book = new XSSFWorkbook(new FileInputStream(file));
-        XSSFSheet sheet = book.getSheetAt(0);
+            System.out.println("Trying to merge...");
 
-        int lastRow = sheet.getLastRowNum();
+            fileName = newName;
+            System.out.println("Loading new file " + fileName);
+            LinkedHashMap<String, Requirement> newMap = Requirement.readFromExcel(fileName);
+            System.out.println("Rows loaded: " + newMap.size());
 
-        for (int rowNum = 0; rowNum <= lastRow; rowNum++) {
+            fileName = mxwebName;
+            System.out.println("Loading mxweb file " + fileName);
+            LinkedHashMap<Integer, MxRequirement> mxwebMap = MxRequirement.readFromExcel(fileName);
+            System.out.println("Rows loaded: " + mxwebMap.size());
 
-            if (rowNum <= Requirement.HEADER_LAST_ROW) continue; // Skip header
+            LinkedHashMap<String, Requirement> mergedMap = new LinkedHashMap<>();
+            for (Map.Entry<String, Requirement> item : newMap.entrySet()) {
+                String mxwebReqId = item.getValue().getReference();
+                if (mxwebReqId != null && mxwebReqId.length() > 0) {
+                    boolean isFound = false;
+                    if (mxwebReqId.contains("\n")) mxwebReqId = mxwebReqId.replace("\n", " ");
+                    // TODO: handle multiply mx requirements in one row
+                    for (Map.Entry<Integer, MxRequirement> mxitem : mxwebMap.entrySet()) {
+                        if (mxitem.getValue().getMxwebid().equals(mxwebReqId)) {
+                            mergedMap.put(item.getKey(), item.getValue());
+                            item.getValue().setRelease(mxitem.getValue().getMxwebid());
+                            isFound = true;
+                            break;
+                        }
+                    }
+                    if (!isFound) {
+                        System.out.println("ERROR. Row " + (item.getValue().getRow() + 1) + " has MxWeb requirement " + mxwebReqId + " but not found in MxWeb sheet.");
+                    }
+                }
+            }
+            // Back check
+            boolean isFound = false;
+            for (Map.Entry<Integer, MxRequirement> mxitem : mxwebMap.entrySet()) {
+                for (Map.Entry<String, Requirement> item : newMap.entrySet()) {
+                    if (item.getValue().getReference().equals(mxitem.getValue().getMxwebid())) {
+                        mergedMap.put(item.getKey(), item.getValue());
+                        item.getValue().setRelease(mxitem.getValue().getMxwebid());
+                        isFound = true;
+                        break;
+                    }
+                }
+                if (!isFound) {
+                    System.out.println("ERROR. MxWeb row " + (mxitem.getKey() + 1) + " has no requirement");               }
+            }
 
-            XSSFRow row = sheet.getRow(rowNum);
-            if (row == null) break;
+            System.out.println("Merged.");
 
-            Requirement req = new Requirement();
-            req.loadFromRow(row);
-            array.put(req.id, req);
+            outMergeResult(resultName, mergedMap);
 
         }
-
-        book.close();
-
-        return array;
+        catch (IOException e) {
+            System.out.println("XLSX file read error: " + fileName);
+        }
     }
 
     /**
@@ -127,12 +174,15 @@ public class XLSCompareMain {
      * @param addedMap - map with added rows
      * @param deletedMap - map with deleted rows
      */
-    private static void outResult(String oldFileName, String newFileName, String resultFileName,
+    private static void outCompareResult(String oldFileName, String newFileName, String resultFileName,
                                   LinkedHashMap<String, Requirement> addedMap, LinkedHashMap<String, Requirement> deletedMap) {
 
         XSSFWorkbook book = new XSSFWorkbook();
 
         if (addedMap.size() > 0 || deletedMap.size() > 0) {
+
+            XSSFSheet currentSheet = book.createSheet("Current");
+            copySheet(newFileName, currentSheet);
 
             XSSFSheet oldSheet = book.createSheet("Old");
             copySheet(oldFileName, oldSheet);
@@ -168,6 +218,33 @@ public class XLSCompareMain {
             }
             catch (IOException e) {
                 System.out.println("Error saving file: " + resultFileName);
+            }
+        }
+    }
+
+    /**
+     * Outputs merge results
+     * @param resultFileName - new file name for merge
+     * @param mergedMap - map with merged rows
+     */
+    private static void outMergeResult(String resultFileName, LinkedHashMap<String, Requirement> mergedMap) {
+
+        if (mergedMap.size() > 0) {
+            XSSFWorkbook book = null;
+            try {
+                book = new XSSFWorkbook(new FileInputStream(resultFileName));
+                XSSFSheet sheet = book.getSheetAt(0);
+            }
+            catch (IOException e) {
+                System.out.println("Error reading file: " + resultFileName);
+            }
+            if (book != null) {
+                try {
+                    book.write(new FileOutputStream(resultFileName));
+                    book.close();
+                } catch (IOException e) {
+                    System.out.println("Error saving file: " + resultFileName);
+                }
             }
         }
     }
