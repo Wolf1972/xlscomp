@@ -239,4 +239,8 @@ public class Requirement {
         cell = row.createCell(19); cell.setCellValue(trello); // Trello task
     }
 
+    @Override
+    public String toString() {
+        return "Requirement{id='" + id + '\'' + '}';
+    }
 }

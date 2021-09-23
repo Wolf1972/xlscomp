@@ -137,11 +137,12 @@ public class XLSCompareMain {
             XSSFSheet oldSheet = book.createSheet("Old");
             copySheet(oldFileName, oldSheet);
             if (deletedMap.size() > 0) {
+                System.out.println("- Deleted rows: " + deletedMap.size());
                 markOneSheet(oldSheet, deletedMap, true);
                 XSSFSheet delSheet = book.createSheet("Deleted");
-                System.out.println("- Deleted rows: " + deletedMap.size());
-                // outOneDiffSheet(delSheet, deletedMap);
-                copySheetFilter(oldSheet, delSheet, deletedMap);
+                copySheetFilter(oldSheet, delSheet, deletedMap, true);
+                XSSFSheet delSheet2 = book.createSheet("Deleted2");
+                outOneDiffSheet(delSheet2, deletedMap);
             }
             else {
                 System.out.println("There are no deleted rows.");
@@ -150,10 +151,12 @@ public class XLSCompareMain {
             XSSFSheet newSheet = book.createSheet("New");
             copySheet(newFileName, newSheet);
             if (addedMap.size() > 0) {
+                System.out.println("+ Added rows: " + addedMap.size());
                 markOneSheet(newSheet, addedMap, false);
                 XSSFSheet addSheet = book.createSheet("Added");
-                System.out.println("+ Added rows: " + addedMap.size());
-                outOneDiffSheet(addSheet, addedMap);
+                copySheetFilter(newSheet, addSheet, addedMap, false);
+                XSSFSheet addSheet2 = book.createSheet("Added2");
+                outOneDiffSheet(addSheet2, addedMap);
             }
             else {
                 System.out.println("There are no added rows.");
@@ -231,12 +234,13 @@ public class XLSCompareMain {
     }
 
     /**
-     * Copies only rows that contain in specified filter map and with all parent rows to specified sheet
+     * Copies rows that contain in specified filter map and copies all its parent rows to specified sheet
      * @param sourceSheet - source sheet
      * @param targetSheet - source sheet
      * @param filterMap - array with specified rows
+     * @param isDeleted - when true rows mark as grey strikeout (deleted), when false - mark as red (inserted)
      */
-    private static void copySheetFilter(XSSFSheet sourceSheet, XSSFSheet targetSheet, LinkedHashMap<String, Requirement> filterMap) {
+    private static void copySheetFilter(XSSFSheet sourceSheet, XSSFSheet targetSheet, LinkedHashMap<String, Requirement> filterMap, boolean isDeleted) {
 
         TreeMap<Integer, Requirement> parents = new TreeMap<>(); // Rows for parent nodes (outline levels and requirements)
         TreeMap<Integer, Requirement> prevParents = new TreeMap<>(); // Parents for previous row
@@ -248,14 +252,13 @@ public class XLSCompareMain {
 
         int newRowNum = 0; // Current row number in target sheet
 
-        Requirement req = new Requirement(); // Current requirement
-
         int lastRow = sourceSheet.getLastRowNum();
 
         for (int i = 0; i <= lastRow; i++) { // View all source sheet
 
             if (i <= Requirement.HEADER_LAST_ROW) continue; // Skip header
 
+            Requirement req = new Requirement(); // Current requirement
             XSSFRow row = sourceSheet.getRow(i);
             req.loadFromRow(row);
 
@@ -270,6 +273,14 @@ public class XLSCompareMain {
                         XSSFCellStyle newCellStyle = targetSheet.getWorkbook().createCellStyle();
                         newCellStyle.cloneStyleFrom(cell.getCellStyle());
                         Font font = targetSheet.getWorkbook().createFont();
+                        if (isDeleted) {
+                            font.setBold(true);
+                            font.setStrikeout(true);
+                        }
+                        else {
+                            font.setBold(true);
+                            font.setColor(IndexedColors.RED.getIndex());
+                        }
                         newCellStyle.setFont(font);
                         styles.add(newCellStyle);
                     }
@@ -300,35 +311,47 @@ public class XLSCompareMain {
                     }
                 }
 
-                // Copy all parent rows and fill styles map for parent rows
-                for (Map.Entry<Integer, Requirement> item : parents.entrySet()) {
-                    Requirement parentReq = item.getValue();
-                    parentRowNum = parentReq.getRow();
-                    XSSFRow parentRow = sourceSheet.getRow(parentRowNum);
-                    int parentOutlineLevel = parentRow.getOutlineLevel();
-                    if (!parentStyles.containsKey(parentOutlineLevel)) {
-                        ArrayList<XSSFCellStyle> styles = new ArrayList<>();
-                        // Copy style from existing cell and correct: all styles after specified row are common - takes it from array
-                        for (int j = 0; j < parentRow.getLastCellNum(); j++) {
-                            XSSFCell cell = parentRow.getCell(j);
-                            XSSFCellStyle newCellStyle = targetSheet.getWorkbook().createCellStyle();
-                            newCellStyle.cloneStyleFrom(cell.getCellStyle());
-                            Font font = targetSheet.getWorkbook().createFont();
-                            font.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
-                            newCellStyle.setFont(font);
-                            styles.add(newCellStyle);
+                boolean isSamePath = false;
+                isSamePath = (prevParents.size() == parents.size());
+                if (isSamePath) {
+                    for (Map.Entry<Integer, Requirement> item : parents.entrySet()) {
+                        int key = item.getKey();
+                        if (!(item.getValue().id.equals(prevParents.get(key).id))) {
+                            isSamePath = false;
+                            break;
                         }
-                        parentStyles.put(parentOutlineLevel, styles);
                     }
-                    if (prevParents.size() < parentOutlineLevel || parents.size() < parentOutlineLevel // TODO: crashes here
-                            || !prevParents.get(parentOutlineLevel).id.equals(parents.get(parentOutlineLevel).id)) {
+                }
+
+                if (!isSamePath) {
+                    // Copy all parent rows and fill styles map for parent rows
+                    for (Map.Entry<Integer, Requirement> item : parents.entrySet()) {
+                        Requirement parentReq = item.getValue();
+                        parentRowNum = parentReq.getRow();
+                        XSSFRow parentRow = sourceSheet.getRow(parentRowNum);
+                        int parentOutlineLevel = parentRow.getOutlineLevel();
+                        if (!parentStyles.containsKey(parentOutlineLevel)) {
+                            ArrayList<XSSFCellStyle> styles = new ArrayList<>();
+                            // Copy style from existing cell and correct: all styles after specified row are common - takes it from array
+                            for (int j = 0; j < parentRow.getLastCellNum(); j++) {
+                                XSSFCell cell = parentRow.getCell(j);
+                                XSSFCellStyle newCellStyle = targetSheet.getWorkbook().createCellStyle();
+                                newCellStyle.cloneStyleFrom(cell.getCellStyle());
+                                Font font = targetSheet.getWorkbook().createFont();
+                                font.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
+                                newCellStyle.setFont(font);
+                                styles.add(newCellStyle);
+                            }
+                            parentStyles.put(parentOutlineLevel, styles);
+                        }
                         copyRow(sourceSheet, targetSheet, parentRowNum, newRowNum, parentStyles.get(parentOutlineLevel));
                         newRowNum++;
                     }
                 }
-                // Copy row suitable for filter
+                // Copy main row suitable for filter
                 copyRow(sourceSheet, targetSheet, i, newRowNum, rowStyles.get(outlineLevel));
                 prevParents = (TreeMap<Integer, Requirement>) parents.clone();
+                // prevParents.put(outlineLevel, req);
                 newRowNum++;
             }
         }
