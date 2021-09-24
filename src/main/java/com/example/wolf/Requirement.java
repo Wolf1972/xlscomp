@@ -210,6 +210,9 @@ public class Requirement extends BaseRequirement {
 
             Requirement req = new Requirement();
             req.loadFromRow(row);
+            if (array.containsKey(req.id)) {
+                System.out.println("ERROR. Row " + (rowNum + 1) + " contains requirement was already loaded before for row " + (array.get(req.id).getRow() + 1));
+            }
             array.put(req.id, req);
 
         }

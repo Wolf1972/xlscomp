@@ -40,8 +40,7 @@ public class XLSCompareMain {
             System.out.println("Current directory: " + dir);
         }
         System.out.println();
-        doCompare(oldName, newName, resultName);
-        if (Files.exists(Paths.get(mxwebName))) doMerge(newName, mxwebName, resultName);
+        doCompare(oldName, newName, mxwebName, resultName);
         System.out.println("Done.");
     }
 
@@ -49,9 +48,10 @@ public class XLSCompareMain {
      * Compare requirements procedure
      * @param oldName - old file name
      * @param newName - new file name for compare
+     * @param mxwebName - file name with mxweb requirements
      * @param resultName - file name for result
      */
-    private static void doCompare(String oldName, String newName, String resultName) {
+    private static void doCompare(String oldName, String newName, String mxwebName, String resultName) {
 
         String fileName = "?";
         try {
@@ -89,82 +89,94 @@ public class XLSCompareMain {
 
             System.out.println("Compared.");
 
-            outCompareResult(oldName, newName, resultName, addedMap, deletedMap);
+            LinkedHashMap<String, Requirement> mergedMap = new LinkedHashMap<>(); // Rows were merged without errors
+            LinkedHashMap<Integer, MxRequirement> missedMap = new LinkedHashMap<>(); // Rows with MxWeb requirements were missed when merge
 
-        }
-        catch (IOException e) {
-            System.out.println("XLSX file read error: " + fileName);
-        }
+            if (mxwebName != null) {
 
-    }
+                System.out.println("Trying to merge...");
 
-    /**
-     * Merge requirements procedure
-     * @param newName - new file name
-     * @param mxwebName - new file name for merge
-     * @param resultName - file name for result
-     */
-    private static void doMerge(String newName, String mxwebName, String resultName) {
+                fileName = mxwebName;
+                System.out.println("Loading mxweb file " + fileName);
+                LinkedHashMap<Integer, MxRequirement> mxwebMap = MxRequirement.readFromExcel(fileName);
+                System.out.println("Rows loaded: " + mxwebMap.size());
 
-        String fileName = "?";
-        try {
-
-            System.out.println("Trying to merge...");
-
-            fileName = newName;
-            System.out.println("Loading new file " + fileName);
-            LinkedHashMap<String, Requirement> newMap = Requirement.readFromExcel(fileName);
-            System.out.println("Rows loaded: " + newMap.size());
-
-            fileName = mxwebName;
-            System.out.println("Loading mxweb file " + fileName);
-            LinkedHashMap<Integer, MxRequirement> mxwebMap = MxRequirement.readFromExcel(fileName);
-            System.out.println("Rows loaded: " + mxwebMap.size());
-
-            LinkedHashMap<String, Requirement> mergedMap = new LinkedHashMap<>();
-            for (Map.Entry<String, Requirement> item : newMap.entrySet()) {
-                String mxwebReqId = item.getValue().getReference();
-                if (mxwebReqId != null && mxwebReqId.length() > 0) {
-                    boolean isFound = false;
-                    if (mxwebReqId.contains("\n")) mxwebReqId = mxwebReqId.replace("\n", " ");
-                    // TODO: handle multiply mx requirements in one row
-                    for (Map.Entry<Integer, MxRequirement> mxitem : mxwebMap.entrySet()) {
-                        if (mxitem.getValue().getMxwebid().equals(mxwebReqId)) {
-                            mergedMap.put(item.getKey(), item.getValue());
-                            item.getValue().setRelease(mxitem.getValue().getMxwebid());
-                            isFound = true;
-                            break;
+                for (Map.Entry<String, Requirement> item : newMap.entrySet()) {
+                    String mxwebReqId = item.getValue().getReference();
+                    if (mxwebReqId != null && mxwebReqId.length() > 0) {
+                        boolean isFound = false;
+                        if (mxwebReqId.contains("\n")) mxwebReqId = mxwebReqId.replace("\n", " ");
+                        List<String> aMReq = new ArrayList<>();
+                        if (mxwebReqId.contains(" ")) {
+                            String[] array = mxwebReqId.split(" ");
+                            aMReq = Arrays.asList(array);
+                        } else {
+                            aMReq.clear();
+                            aMReq.add(mxwebReqId);
+                        }
+                        for (int k = 0; k < aMReq.size(); k++) {
+                            for (Map.Entry<Integer, MxRequirement> mxitem : mxwebMap.entrySet()) {
+                                String mxId = mxitem.getValue().getMxwebid();
+                                if (mxId.equals(aMReq.get(k))) {
+                                    mergedMap.put(item.getKey(), item.getValue());
+                                    item.getValue().setRelease(mxitem.getValue().getMxwebid());
+                                    isFound = true;
+                                    break;
+                                }
+                            }
+                            if (!isFound) {
+                                System.out.println("ERROR. Requirement row " + (item.getValue().getRow() + 1) + " has MxWeb requirement " + aMReq.get(k) + " but has not found in the MxWeb sheet.");
+                            }
                         }
                     }
-                    if (!isFound) {
-                        System.out.println("ERROR. Row " + (item.getValue().getRow() + 1) + " has MxWeb requirement " + mxwebReqId + " but not found in MxWeb sheet.");
+                }
+
+                // Reverse check - try to find MxWeb requirement has missed in our sheet
+                for (Map.Entry<Integer, MxRequirement> mxitem : mxwebMap.entrySet()) {
+                    if (!mxitem.getValue().getMxwebid().isEmpty()) {
+                        boolean isFound = false;
+
+                        for (Map.Entry<String, Requirement> item : newMap.entrySet()) {
+                            String mxwebReqId = item.getValue().getReference();
+                            if (mxwebReqId != null && !mxwebReqId.isEmpty()) {
+                                List<String> aMReq = new ArrayList<>();
+                                if (mxwebReqId.contains(" ")) {
+                                    String[] array = mxwebReqId.split(" ");
+                                    aMReq = Arrays.asList(array);
+                                } else {
+                                    aMReq.clear();
+                                    aMReq.add(mxwebReqId);
+                                }
+                                for (int k = 0; k < aMReq.size(); k++) {
+                                    if (mxitem.getValue().getMxwebid().equals(aMReq.get(k))) {
+                                        mergedMap.put(item.getKey(), item.getValue());
+                                        item.getValue().setRelease(mxitem.getValue().getMxwebid());
+                                        isFound = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (!isFound) {
+                            System.out.println("ERROR. MxWeb requirement " + (mxitem.getValue().getMxwebid()) + " has not found in our sheet.");
+                            missedMap.put(mxitem.getKey(), mxitem.getValue());
+                        }
                     }
                 }
-            }
-            // Back check
-            boolean isFound = false;
-            for (Map.Entry<Integer, MxRequirement> mxitem : mxwebMap.entrySet()) {
-                for (Map.Entry<String, Requirement> item : newMap.entrySet()) {
-                    if (item.getValue().getReference().equals(mxitem.getValue().getMxwebid())) {
-                        mergedMap.put(item.getKey(), item.getValue());
-                        item.getValue().setRelease(mxitem.getValue().getMxwebid());
-                        isFound = true;
-                        break;
-                    }
-                }
-                if (!isFound) {
-                    System.out.println("ERROR. MxWeb row " + (mxitem.getKey() + 1) + " has no requirement");               }
+
+                System.out.println("Merged.");
             }
 
-            System.out.println("Merged.");
-
-            outMergeResult(resultName, mergedMap);
+            outResult(oldName, newName, resultName, addedMap, deletedMap, mergedMap, missedMap);
 
         }
         catch (IOException e) {
             System.out.println("XLSX file read error: " + fileName);
         }
+
     }
+
+
 
     /**
      * Outputs compare results
@@ -173,9 +185,12 @@ public class XLSCompareMain {
      * @param resultFileName - file name for results
      * @param addedMap - map with added rows
      * @param deletedMap - map with deleted rows
+     * @param mergedMap - map with merged rows
+     * @param missedMap - map with MxWeb requirements rows were missed when merge
      */
-    private static void outCompareResult(String oldFileName, String newFileName, String resultFileName,
-                                  LinkedHashMap<String, Requirement> addedMap, LinkedHashMap<String, Requirement> deletedMap) {
+    private static void outResult(String oldFileName, String newFileName, String resultFileName,
+                                  LinkedHashMap<String, Requirement> addedMap, LinkedHashMap<String, Requirement> deletedMap,
+                                  LinkedHashMap<String, Requirement> mergedMap, LinkedHashMap<Integer, MxRequirement> missedMap) {
 
         XSSFWorkbook book = new XSSFWorkbook();
 
@@ -212,39 +227,31 @@ public class XLSCompareMain {
                 System.out.println("There are no added rows.");
             }
 
+            if (mergedMap.size() > 0) {
+                XSSFSheet mergedSheet = book.createSheet("Merged");
+                copySheet(newFileName, mergedSheet);
+                System.out.println("= Merged rows: " + mergedMap.size());
+                markOneSheet(mergedSheet, mergedMap, false);
+            }
+            else {
+                System.out.println("There are no merged rows.");
+            }
+
+            if (missedMap.size() > 0) {
+                XSSFSheet missedSheet = book.createSheet("Missed");
+                outOneMissedSheet(missedSheet, missedMap);
+                System.out.println("X Missed rows: " + missedMap.size());
+            }
+            else {
+                System.out.println("There are no merged rows.");
+            }
+
             try {
                 book.write(new FileOutputStream(resultFileName));
                 book.close();
             }
             catch (IOException e) {
                 System.out.println("Error saving file: " + resultFileName);
-            }
-        }
-    }
-
-    /**
-     * Outputs merge results
-     * @param resultFileName - new file name for merge
-     * @param mergedMap - map with merged rows
-     */
-    private static void outMergeResult(String resultFileName, LinkedHashMap<String, Requirement> mergedMap) {
-
-        if (mergedMap.size() > 0) {
-            XSSFWorkbook book = null;
-            try {
-                book = new XSSFWorkbook(new FileInputStream(resultFileName));
-                XSSFSheet sheet = book.getSheetAt(0);
-            }
-            catch (IOException e) {
-                System.out.println("Error reading file: " + resultFileName);
-            }
-            if (book != null) {
-                try {
-                    book.write(new FileOutputStream(resultFileName));
-                    book.close();
-                } catch (IOException e) {
-                    System.out.println("Error saving file: " + resultFileName);
-                }
             }
         }
     }
@@ -509,6 +516,26 @@ public class XLSCompareMain {
             if (pos >= 0) name = item.substring(0, pos);
         }
         return name;
+    }
+
+    /**
+     * Outputs one Excel sheet with missed rows with MxWeb requirements
+     * @param sheet - Excel sheet
+     * @param array - array to fill sheet
+     */
+    private static void outOneMissedSheet(XSSFSheet sheet, LinkedHashMap<Integer, MxRequirement> array) {
+
+        int rowNum = 0;
+        int level = 0;
+        for (Map.Entry<Integer, MxRequirement> item : array.entrySet()) {
+            XSSFRow rowMxWeb = sheet.createRow(rowNum);
+            XSSFCell cellId = rowMxWeb.createCell(0);
+            cellId.setCellType(CellType.STRING);
+            cellId.setCellValue(item.getValue().getMxwebid());
+            XSSFCell cellName = rowMxWeb.createCell(1);
+            cellName.setCellValue(item.getValue().getName());
+            rowNum++;
+        }
     }
 
     /**

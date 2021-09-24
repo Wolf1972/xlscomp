@@ -43,8 +43,8 @@ public class MxRequirement extends BaseRequirement {
         if (cells > 8) weight = safeLoadDouble(xrow, 8); // Weight
         if (cells > 9) release = safeLoadString(xrow, 9); // Release
         if (cells > 10) platform = safeLoadString(xrow, 10); // Platform name
-        // if (cells > 11) mxwebid = safeLoadString(xrow, 11); // MXWeb id
-        if (cells > 11) mxwebid = "M_" + id; // MXWeb id
+
+        if (cells > 13) mxwebid = safeLoadString(xrow, 13); // MXWeb id
 
     }
 
@@ -59,6 +59,8 @@ public class MxRequirement extends BaseRequirement {
     public String getMxwebid() {
         return mxwebid;
     }
+
+    public String getName() { return name; }
 
     public void setMxwebid(String mxwebid) {
         this.mxwebid = mxwebid;

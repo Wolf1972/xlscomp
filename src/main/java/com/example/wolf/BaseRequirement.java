@@ -26,7 +26,13 @@ public class BaseRequirement {
                 } else if (type == CellType.ERROR) {
                     result = cell.getErrorCellString();
                 } else if (type == CellType.FORMULA) {
-                    result = cell.getCellFormula();
+                    try {
+                        result = cell.getStringCellValue();
+                    }
+                    catch (Exception e) { // Formula can returns numeric value
+                        Double number = cell.getNumericCellValue();
+                        result = number.toString();
+                    }
                 } else if (type == CellType.NUMERIC) {
                     Double number = cell.getNumericCellValue();
                     result = number.toString();
@@ -62,9 +68,14 @@ public class BaseRequirement {
                 } else if (type == CellType.ERROR) {
                     // Do nothing;
                 } else if (type == CellType.FORMULA) {
-                    // Do nothing;
+                    try {
+                        result = (int) Math.round(cell.getNumericCellValue());
+                    }
+                    catch (Exception e) { // Formula can returns string value
+                        result = Integer.parseInt(cell.getStringCellValue());
+                    }
                 } else if (type == CellType.NUMERIC) {
-                    result = new Integer((int) Math.round(cell.getNumericCellValue()));
+                    result = (int) Math.round(cell.getNumericCellValue());
                 } else if (type == CellType.STRING) {
                     result = Integer.parseInt(cell.getStringCellValue());
                 }
@@ -97,7 +108,12 @@ public class BaseRequirement {
                 } else if (type == CellType.ERROR) {
                     // Do nothing;
                 } else if (type == CellType.FORMULA) {
-                    // Do nothing;
+                    try {
+                        result = cell.getNumericCellValue();
+                    }
+                    catch (Exception e) { // Formula can returns string value
+                        result = Double.parseDouble(cell.getStringCellValue());
+                    }
                 } else if (type == CellType.NUMERIC) {
                     result = cell.getNumericCellValue();
                 } else if (type == CellType.STRING) {
