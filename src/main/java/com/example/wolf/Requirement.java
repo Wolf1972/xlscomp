@@ -91,12 +91,12 @@ public class Requirement extends BaseRequirement {
         return reference;
     }
 
-    public void setReference(String reference) {
-        this.reference = reference;
+    public String getSource_req() {
+        return source_req;
     }
 
-    public void setRelease(String release) {
-        this.release = release;
+    public void setSource_req(String source_req) {
+        this.source_req = source_req;
     }
 
     /**

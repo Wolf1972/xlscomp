@@ -1,5 +1,7 @@
 package com.example.wolf;
 
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -7,6 +9,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.LinkedHashMap;
+import java.util.Map;
 
 public class MxRequirement extends BaseRequirement {
 
@@ -62,9 +65,7 @@ public class MxRequirement extends BaseRequirement {
 
     public String getName() { return name; }
 
-    public void setMxwebid(String mxwebid) {
-        this.mxwebid = mxwebid;
-    }
+    public String getRelease() { return release; }
 
     /**
      * Reads one Excel file (first sheet)
@@ -96,5 +97,24 @@ public class MxRequirement extends BaseRequirement {
         book.close();
 
         return array;
+    }
+
+    /**
+     * Outputs one Excel sheet with missed rows with MxWeb requirements
+     * @param sheet - Excel sheet
+     * @param array - array to fill sheet
+     */
+    static void outMissedSheet(XSSFSheet sheet, LinkedHashMap<Integer, MxRequirement> array) {
+
+        int rowNum = 0;
+        for (Map.Entry<Integer, MxRequirement> item : array.entrySet()) {
+            XSSFRow rowMxWeb = sheet.createRow(rowNum);
+            XSSFCell cellId = rowMxWeb.createCell(0);
+            cellId.setCellType(CellType.STRING);
+            cellId.setCellValue(item.getValue().getMxwebid());
+            XSSFCell cellName = rowMxWeb.createCell(1);
+            cellName.setCellValue(item.getValue().getName());
+            rowNum++;
+        }
     }
 }

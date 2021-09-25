@@ -1,14 +1,11 @@
 package com.example.wolf;
 
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.*;
 
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+
 import java.util.*;
 
 public class XLSCompareMain {
@@ -119,7 +116,6 @@ public class XLSCompareMain {
                                 String mxId = mxitem.getValue().getMxwebid();
                                 if (mxId.equals(aMReq.get(k))) {
                                     mergedMap.put(item.getKey(), item.getValue());
-                                    item.getValue().setRelease(mxitem.getValue().getMxwebid());
                                     isFound = true;
                                     break;
                                 }
@@ -133,28 +129,39 @@ public class XLSCompareMain {
 
                 // Reverse check - try to find MxWeb requirement has missed in our sheet
                 for (Map.Entry<Integer, MxRequirement> mxitem : mxwebMap.entrySet()) {
-                    if (!mxitem.getValue().getMxwebid().isEmpty()) {
+                    String searchFor = mxitem.getValue().getMxwebid();
+                    String release = mxitem.getValue().getRelease();
+                    if (searchFor != null && !searchFor.isEmpty()) {
+                        if (release == null || release.isEmpty()) {
+                            System.out.println("WARN. MxWeb requirement " + searchFor + " without release specified.");
+                        }
                         boolean isFound = false;
-
                         for (Map.Entry<String, Requirement> item : newMap.entrySet()) {
                             String mxwebReqId = item.getValue().getReference();
                             if (mxwebReqId != null && !mxwebReqId.isEmpty()) {
-                                List<String> aMReq = new ArrayList<>();
+                                if (mxwebReqId.contains("\n")) mxwebReqId = mxwebReqId.replace("\n", " ");
+                                List<String> aMReq;
                                 if (mxwebReqId.contains(" ")) {
                                     String[] array = mxwebReqId.split(" ");
                                     aMReq = Arrays.asList(array);
                                 } else {
-                                    aMReq.clear();
-                                    aMReq.add(mxwebReqId);
+                                    aMReq = Arrays.asList(mxwebReqId);
                                 }
                                 for (int k = 0; k < aMReq.size(); k++) {
-                                    if (mxitem.getValue().getMxwebid().equals(aMReq.get(k))) {
+                                    if (aMReq.get(k).equals(searchFor)) {
                                         mergedMap.put(item.getKey(), item.getValue());
-                                        item.getValue().setRelease(mxitem.getValue().getMxwebid());
+                                        String oldRelease = item.getValue().getSource_req();
+                                        if (oldRelease != null && !oldRelease.isEmpty() && !oldRelease.equals(release)) {
+                                            System.out.println("ERROR. Row " + (item.getValue().getRow() + 1) + " already has release " + oldRelease);
+                                        }
+                                        else {
+                                            item.getValue().setSource_req(release);
+                                        }
                                         isFound = true;
                                         break;
                                     }
                                 }
+                                if (isFound) break;
                             }
                         }
                         if (!isFound) {
@@ -176,8 +183,6 @@ public class XLSCompareMain {
 
     }
 
-
-
     /**
      * Outputs compare results
      * @param oldFileName - old file name
@@ -197,10 +202,10 @@ public class XLSCompareMain {
         if (addedMap.size() > 0 || deletedMap.size() > 0) {
 
             XSSFSheet currentSheet = book.createSheet("Current");
-            copySheet(newFileName, currentSheet);
+            XLSUtil.copySheet(newFileName, currentSheet);
 
             XSSFSheet oldSheet = book.createSheet("Old");
-            copySheet(oldFileName, oldSheet);
+            XLSUtil.copySheet(oldFileName, oldSheet);
             if (deletedMap.size() > 0) {
                 System.out.println("- Deleted rows: " + deletedMap.size());
                 markOneSheet(oldSheet, deletedMap, true);
@@ -214,7 +219,7 @@ public class XLSCompareMain {
             }
 
             XSSFSheet newSheet = book.createSheet("New");
-            copySheet(newFileName, newSheet);
+            XLSUtil.copySheet(newFileName, newSheet);
             if (addedMap.size() > 0) {
                 System.out.println("+ Added rows: " + addedMap.size());
                 markOneSheet(newSheet, addedMap, false);
@@ -227,11 +232,28 @@ public class XLSCompareMain {
                 System.out.println("There are no added rows.");
             }
 
-            if (mergedMap.size() > 0) {
+            if (mergedMap.size() > 0) { // TODO
                 XSSFSheet mergedSheet = book.createSheet("Merged");
-                copySheet(newFileName, mergedSheet);
+                XLSUtil.copySheet(newFileName, mergedSheet);
                 System.out.println("= Merged rows: " + mergedMap.size());
                 markOneSheet(mergedSheet, mergedMap, false);
+                // Output merged results
+                int maxRow = mergedSheet.getLastRowNum();
+                for (int i = 0; i < maxRow; i++) {
+                    XSSFRow row = mergedSheet.getRow(i);
+                    for (Map.Entry<String, Requirement> item : mergedMap.entrySet()) {
+                        if (item.getValue().getRow() == i) {
+                            String release = item.getValue().getSource_req();
+                            if (row.getLastCellNum() > 16) {
+                                if (!item.getValue().getSource_req().equals(release))
+                                    row.getCell(16).setCellValue(release);
+                            } else {
+                                XSSFCell cell = row.createCell(16);
+                                cell.setCellValue(release);
+                            }
+                        }
+                    }
+                }
             }
             else {
                 System.out.println("There are no merged rows.");
@@ -239,11 +261,11 @@ public class XLSCompareMain {
 
             if (missedMap.size() > 0) {
                 XSSFSheet missedSheet = book.createSheet("Missed");
-                outOneMissedSheet(missedSheet, missedMap);
+                MxRequirement.outMissedSheet(missedSheet, missedMap);
                 System.out.println("X Missed rows: " + missedMap.size());
             }
             else {
-                System.out.println("There are no merged rows.");
+                System.out.println("There are no missed rows.");
             }
 
             try {
@@ -428,12 +450,12 @@ public class XLSCompareMain {
                             }
                             parentStyles.put(parentOutlineLevel, styles);
                         }
-                        copyRow(sourceSheet, targetSheet, parentRowNum, newRowNum, parentStyles.get(parentOutlineLevel));
+                        XLSUtil.copyRow(sourceSheet, targetSheet, parentRowNum, newRowNum, parentStyles.get(parentOutlineLevel));
                         newRowNum++;
                     }
                 }
                 // Copy main row suitable for filter
-                copyRow(sourceSheet, targetSheet, i, newRowNum, rowStyles.get(outlineLevel));
+                XLSUtil.copyRow(sourceSheet, targetSheet, i, newRowNum, rowStyles.get(outlineLevel));
                 prevParents = (TreeMap<Integer, Requirement>) parents.clone();
                 // prevParents.put(outlineLevel, req);
                 newRowNum++;
@@ -516,230 +538,5 @@ public class XLSCompareMain {
             if (pos >= 0) name = item.substring(0, pos);
         }
         return name;
-    }
-
-    /**
-     * Outputs one Excel sheet with missed rows with MxWeb requirements
-     * @param sheet - Excel sheet
-     * @param array - array to fill sheet
-     */
-    private static void outOneMissedSheet(XSSFSheet sheet, LinkedHashMap<Integer, MxRequirement> array) {
-
-        int rowNum = 0;
-        int level = 0;
-        for (Map.Entry<Integer, MxRequirement> item : array.entrySet()) {
-            XSSFRow rowMxWeb = sheet.createRow(rowNum);
-            XSSFCell cellId = rowMxWeb.createCell(0);
-            cellId.setCellType(CellType.STRING);
-            cellId.setCellValue(item.getValue().getMxwebid());
-            XSSFCell cellName = rowMxWeb.createCell(1);
-            cellName.setCellValue(item.getValue().getName());
-            rowNum++;
-        }
-    }
-
-    /**
-     * Copying first sheet from specified source file into specified target sheet
-     * Defines outline level while copying for grouping rows
-     * Collects styles while copying: several header rows separately with common styles for requirement rows
-     * Grouping rows with outline levels after copying
-     * @param sourceFile - source file name
-     * @param targetSheet - target sheet
-     */
-    private static void copySheet(String sourceFile, XSSFSheet targetSheet) {
-
-        class Group { // Item for rows grouping
-            private int start;
-            private int end;
-            private int level;
-            private boolean closed;
-            private Group(int start, int end, int level) {
-                this.start = start;
-                this.end = end;
-                this.level = level;
-                this.closed = false;
-            }
-        }
-
-        ArrayList<Group> groups = new ArrayList<>();
-
-        // Common styles for all group levels (with outline levels)
-        HashMap<Integer, ArrayList<XSSFCellStyle>> groupStyles = new HashMap<>();
-
-        try {
-
-            XSSFWorkbook sourceBook = new XSSFWorkbook(new FileInputStream(sourceFile));
-            XSSFSheet sourceSheet = sourceBook.getSheetAt(0);
-            int oldOutlineLevel = 0;
-            int lastRow = sourceSheet.getLastRowNum();
-
-            for (int i = 0; i <= lastRow; i++) {
-
-                int outlineLevel = sourceSheet.getRow(i).getOutlineLevel();
-
-                if (i > Requirement.HEADER_LAST_ROW && outlineLevel >= 0) {
-
-                    int specifiedOutlineLevel = (int) sourceSheet.getRow(i).getCell(0).getNumericCellValue();
-                    if (outlineLevel + 1 != specifiedOutlineLevel) {
-                        System.out.println("ERROR in row " + (i + 1) + ". Real row outline level " + (outlineLevel + 1) + " doesn't suite with level has specified in first column: " + specifiedOutlineLevel);
-                    }
-
-                    if (oldOutlineLevel != outlineLevel) {
-                        if (oldOutlineLevel < outlineLevel) { // Dive! Dive! Dive
-                            groups.add(new Group(i, 0, outlineLevel));
-                        } else { // Surfacing!
-                            for (int g = outlineLevel; g <= oldOutlineLevel; g++) { // May be close several groups in the same time
-                                for (Group group : groups) {
-                                    if (!group.closed && group.level == g + 1) {
-                                        group.end = i - 1;
-                                        group.closed = true;
-                                    }
-                                }
-                            }
-                        }
-                        oldOutlineLevel = outlineLevel;
-                    }
-                }
-
-                ArrayList<XSSFCellStyle> styles = new ArrayList<>(); // Styles for current row
-
-                if (i <= Requirement.HEADER_LAST_ROW || !groupStyles.containsKey(outlineLevel)) {
-                    // Styles for header row or row with unknown outline level
-                    // Copy style from old cell and apply to new cell: all styles after specified row are common - takes it from array
-                    for (int j = 0; j < sourceSheet.getRow(i).getLastCellNum(); j++) {
-                        XSSFCell cell = sourceSheet.getRow(i).getCell(j);
-                        XSSFCellStyle newCellStyle = targetSheet.getWorkbook().createCellStyle();
-                        newCellStyle.cloneStyleFrom(cell.getCellStyle());
-                        styles.add(newCellStyle);
-                    }
-                    if (i > Requirement.HEADER_LAST_ROW) { // For regular rows with requirement add common style for outline level
-                        groupStyles.put(outlineLevel, styles);
-                    }
-                }
-                else {
-                    styles = groupStyles.get(outlineLevel); // Use common style has already defined
-                }
-                copyRow(sourceSheet, targetSheet, i, i, styles);
-            }
-
-            sourceBook.close();
-
-            for (Group group : groups) { // Close all unclosed groups with last row
-                if (!group.closed) {
-                    group.end = lastRow;
-                    group.closed = true;
-                }
-            }
-
-        }
-        catch (IOException e) {
-            System.out.println("Error while reading source sheet: " + sourceFile);
-        }
-
-        targetSheet.setRowSumsBelow(false); // Set group header at the top of group
-        for (Group group : groups) {
-            // System.out.println(group.start + " : " + group.end + " - " + group.level);
-            targetSheet.groupRow(group.start, group.end);
-        }
-
-    }
-
-    /**
-     * Copying one specified row (by position) from specified source sheet to specified target sheet
-     * If row with specified number already exists in target row, then row inserts with scroll rows below
-     * Sets specified styles for target row
-     * Based on some stackoverflow topics
-     * @param sourceWorksheet - source sheet
-     * @param targetWorksheet = target sheet
-     * @param sourceRowNum = source row number
-     * @param targetRowNum - destination row number
-     * @param columnStyles - styles for all columns
-     */
-    private static void copyRow(XSSFSheet sourceWorksheet, XSSFSheet targetWorksheet,
-                                int sourceRowNum, int targetRowNum,
-                                ArrayList<XSSFCellStyle> columnStyles) {
-        // Get the source / new row
-        XSSFRow newRow = targetWorksheet.getRow(targetRowNum);
-        XSSFRow sourceRow = sourceWorksheet.getRow(sourceRowNum);
-
-        // If the row exist in destination, push down all rows by 1 else create a new row
-        if (newRow != null) {
-            targetWorksheet.shiftRows(targetRowNum, targetWorksheet.getLastRowNum(), 1);
-        } else {
-            newRow = targetWorksheet.createRow(targetRowNum);
-        }
-
-        // Loop through source columns to add to new row
-        for (int i = 0; i < sourceRow.getLastCellNum(); i++) {
-            // Grab a copy of the old/new cell
-            XSSFCell oldCell = sourceRow.getCell(i);
-            XSSFCell newCell = newRow.createCell(i);
-
-            // Do not copy service columns
-            if (i > Requirement.LAST_COMMON_COLUMN) {
-                continue;
-            }
-            // If the old cell is null jump to next cell
-            if (oldCell == null) {
-                continue;
-            }
-
-            if (columnStyles != null && i < columnStyles.size()) {
-                XSSFCellStyle newCellStyle = columnStyles.get(i);
-                newCell.setCellStyle(newCellStyle);
-            }
-
-            targetWorksheet.setColumnWidth(i, sourceWorksheet.getColumnWidth(i));
-
-            // If there is a cell comment, copy
-            if (oldCell.getCellComment() != null) {
-                newCell.setCellComment(oldCell.getCellComment());
-            }
-
-            // If there is a cell hyperlink, copy
-            if (oldCell.getHyperlink() != null) {
-                newCell.setHyperlink(oldCell.getHyperlink());
-            }
-
-            // Set the cell data value
-            CellType type = oldCell.getCellType();
-            if (type == CellType.BLANK) {
-                newCell.setCellType(type);
-                newCell.setCellValue(oldCell.getStringCellValue());
-            }
-            else if (type == CellType.BOOLEAN) {
-                newCell.setCellType(type);
-                newCell.setCellValue(oldCell.getBooleanCellValue());
-            }
-            else if (type == CellType.ERROR) {
-                newCell.setCellType(type);
-                newCell.setCellErrorValue(oldCell.getErrorCellValue());
-            }
-            else if (type == CellType.FORMULA) {
-                newCell.setCellFormula(oldCell.getCellFormula());
-            }
-            else if (type == CellType.NUMERIC) {
-                newCell.setCellType(type);
-                newCell.setCellValue(oldCell.getNumericCellValue());
-            }
-            else if (type == CellType.STRING) {
-                newCell.setCellType(type);
-                newCell.setCellValue(oldCell.getRichStringCellValue());
-            }
-        }
-
-        // If there are any merged regions in the source row, copy to new row
-        for (int i = 0; i < sourceWorksheet.getNumMergedRegions(); i++) {
-            CellRangeAddress cellRangeAddress = sourceWorksheet.getMergedRegion(i);
-            if (cellRangeAddress.getFirstRow() == sourceRow.getRowNum()) {
-                CellRangeAddress newCellRangeAddress = new CellRangeAddress(newRow.getRowNum(),
-                        (newRow.getRowNum() +
-                                (cellRangeAddress.getLastRow() - cellRangeAddress.getFirstRow()
-                                )),
-                        cellRangeAddress.getFirstColumn(),
-                        cellRangeAddress.getLastColumn());
-                targetWorksheet.addMergedRegion(newCellRangeAddress);
-            }
-        }
     }
 }
