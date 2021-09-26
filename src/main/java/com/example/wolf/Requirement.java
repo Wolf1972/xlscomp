@@ -13,7 +13,6 @@ import java.util.LinkedHashMap;
 public class Requirement extends BaseRequirement {
 
     static final int HEADER_LAST_ROW = 1; // Header row index (starts from 0)
-    static final int LAST_COMMON_COLUMN = 12; // Last copying column index (starts from 0) - to prevent copying service columns
 
     String id; // Requirement id
     private Integer row; // Excel sheet row num (when requirement loads from Excel sheet)

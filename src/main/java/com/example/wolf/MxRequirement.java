@@ -13,9 +13,6 @@ import java.util.Map;
 
 public class MxRequirement extends BaseRequirement {
 
-    static final int HEADER_LAST_ROW = 0; // Header row index (starts from 0)
-    static final int LAST_COMMON_COLUMN = 12; // Last copying column index (starts from 0) - to prevent copying service columns
-
     Integer id; // Requirement id
     private String block; // Block name
     private String name; // Requirement

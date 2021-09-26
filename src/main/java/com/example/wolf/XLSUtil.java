@@ -17,8 +17,9 @@ public class XLSUtil {
      * Grouping rows with outline levels after copying
      * @param sourceFile - source file name
      * @param targetSheet - target sheet
+     * @param maxColumn - last column to copy (to prevent copying service secured columns), when = 0 - copying all columns from row
      */
-    static void copySheet(String sourceFile, XSSFSheet targetSheet) {
+    static void copySheet(String sourceFile, XSSFSheet targetSheet, int maxColumn) {
 
         class Group { // Item for rows grouping
             private int start;
@@ -91,7 +92,7 @@ public class XLSUtil {
                 else {
                     styles = groupStyles.get(outlineLevel); // Use common style has already defined
                 }
-                copyRow(sourceSheet, targetSheet, i, i, styles);
+                copyRow(sourceSheet, targetSheet, i, i, maxColumn, styles);
             }
 
             sourceBook.close();
@@ -125,10 +126,12 @@ public class XLSUtil {
      * @param targetWorksheet = target sheet
      * @param sourceRowNum = source row number
      * @param targetRowNum - destination row number
+     * @param maxColumn - last column to copy (to prevent copying service secured columns), when = 0 - copying all columns from row
      * @param columnStyles - styles for all columns
      */
     static void copyRow(XSSFSheet sourceWorksheet, XSSFSheet targetWorksheet,
                                 int sourceRowNum, int targetRowNum,
+                                int maxColumn,
                                 ArrayList<XSSFCellStyle> columnStyles) {
         // Get the source / new row
         XSSFRow newRow = targetWorksheet.getRow(targetRowNum);
@@ -148,7 +151,7 @@ public class XLSUtil {
             XSSFCell newCell = newRow.createCell(i);
 
             // Do not copy service columns
-            if (i > Requirement.LAST_COMMON_COLUMN) {
+            if ((maxColumn > 0) && (i > maxColumn)) {
                 continue;
             }
             // If the old cell is null jump to next cell
