@@ -1,5 +1,6 @@
 package com.example.wolf;
 
+import org.apache.commons.cli.*;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.*;
 
@@ -11,34 +12,54 @@ import java.util.*;
 public class XLSCompareMain {
 
     public static void main (String[] args) {
-        System.out.println("Trying to compare XLSX with requirements hierarchy.");
+        System.out.println("Compare for hierarchical requirements in XLSX.");
 
-        String dir = System.getProperty("user.dir");
-        String oldName = dir + "\\data\\old.xlsx";
-        String newName = dir + "\\data\\new.xlsx";
-        String resultName = dir + "\\data\\result.xlsx";
-        String mxwebName = dir + "\\data\\mxweb.xlsx";
+        String dir = System.getProperty("user.dir"); if (!dir.endsWith("\\")) dir += "\\"; // Current directory
 
-        int maxColumn = 20; // last column to copy (to prevent copying service secured columns), when = 0 - copying all columns from row
-                            // set to 12 for public results
+        String oldFile = "data\\old.xlsx";
+        String newFile = "data\\new.xlsx";
+        String resultFile = "data\\result.xlsx";
+        String mergeFile = "data\\mxweb.xlsx";
+        String cmdColumns = "13";
 
-        if (args.length >= 4) {
-            oldName = args[0];
-            newName = args[1];
-            mxwebName = args[2];
-            resultName = args[3];
+        Options options = new Options();
+        options.addOption("o", "old", true, "Old XLSX file for compare");
+        options.addOption("n", "new", true, "New XLSX file for compare");
+        options.addOption("r", "result", true, "XLSX file for result");
+        options.addOption("m", "merge", true, "XLSX file with MxWeb requirements to merge");
+        options.addOption("c", "columns", true, "Result columns count (13 by default, 21 maximum)");
+        options.addOption("d", "directory", true, "Common directory for all input and output files");
+
+        CommandLineParser parser = new DefaultParser();
+        try {
+            CommandLine command = parser.parse(options, args);
+
+            if (command.hasOption('d')) { dir = command.getOptionValue('d'); if (!dir.endsWith("\\")) dir += "\\"; }
+            if (command.hasOption('i')) { newFile = command.getOptionValue('i'); }
+            if (command.hasOption('i')) { resultFile = command.getOptionValue('r'); }
+            if (command.hasOption('o')) { oldFile = command.getOptionValue('o'); }
+            if (command.hasOption('m')) { mergeFile = command.getOptionValue('m'); }
+            if (command.hasOption('c')) cmdColumns = command.getOptionValue('c');
         }
-        else if (args.length >= 3) {
-            oldName = args[0];
-            newName = args[1];
-            resultName = args[2];
+        catch (ParseException e) {
+            System.out.println("Command line parse exception.");
+            HelpFormatter help = new HelpFormatter();
+            help.printHelp(XLSCompareMain.class.getSimpleName(), options);
+            return;
         }
-        else {
-            System.out.println("Usage: <old file> <new file to compare> <file with results>");
-            System.out.println("   or: <old file> <new file to compare> <mxweb file> <file with results>");
-            System.out.println("You didn't define any parameter, try to default names...");
-            System.out.println("Current directory: " + dir);
-        }
+
+        String oldName = dir + oldFile;
+        String newName = dir + newFile;
+        String resultName = dir + resultFile;
+        String mxwebName = mergeFile != null? dir + mergeFile : "";
+
+        System.out.println("Old requirements: " + oldName);
+        System.out.println("New requirements: " + newName);
+        System.out.println("Result requirements: " + resultName);
+        if (!mxwebName.isEmpty()) System.out.println("Merged requirements: " + mxwebName);
+        int maxColumn = Integer.parseInt(cmdColumns) - 1; // last column to copy (to prevent copying service secured columns), when = 0 - copying all columns from row
+        if (maxColumn < 0) maxColumn = 12; // set to 12 for public results
+
         System.out.println();
         doCompare(oldName, newName, mxwebName, resultName, maxColumn);
         System.out.println("Done.");
