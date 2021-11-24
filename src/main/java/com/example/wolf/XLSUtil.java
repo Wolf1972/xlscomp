@@ -81,9 +81,11 @@ public class XLSUtil {
                     // Copy style from old cell and apply to new cell: all styles after specified row are common - takes it from array
                     for (int j = 0; j < sourceSheet.getRow(i).getLastCellNum(); j++) {
                         XSSFCell cell = sourceSheet.getRow(i).getCell(j);
-                        XSSFCellStyle newCellStyle = targetSheet.getWorkbook().createCellStyle();
-                        newCellStyle.cloneStyleFrom(cell.getCellStyle());
-                        styles.add(newCellStyle);
+                        if (cell != null) { // Sometimes we can not obtain some cell even if j < getLastCellNum (possible - merged cells?)
+                            XSSFCellStyle newCellStyle = targetSheet.getWorkbook().createCellStyle();
+                            newCellStyle.cloneStyleFrom(cell.getCellStyle());
+                            styles.add(newCellStyle);
+                        }
                     }
                     if (i > Requirement.HEADER_LAST_ROW) { // For regular rows with requirement add common style for outline level
                         groupStyles.put(outlineLevel, styles);
@@ -130,9 +132,9 @@ public class XLSUtil {
      * @param columnStyles - styles for all columns
      */
     static void copyRow(XSSFSheet sourceWorksheet, XSSFSheet targetWorksheet,
-                                int sourceRowNum, int targetRowNum,
-                                int maxColumn,
-                                ArrayList<XSSFCellStyle> columnStyles) {
+                        int sourceRowNum, int targetRowNum,
+                        int maxColumn,
+                        ArrayList<XSSFCellStyle> columnStyles) {
         // Get the source / new row
         XSSFRow newRow = targetWorksheet.getRow(targetRowNum);
         XSSFRow sourceRow = sourceWorksheet.getRow(sourceRowNum);
@@ -154,7 +156,7 @@ public class XLSUtil {
             if ((maxColumn > 0) && (i > maxColumn)) {
                 continue;
             }
-            // If the old cell is null jump to next cell
+            // If the old cell is null jump to next cell (may be merged cells?)
             if (oldCell == null) {
                 continue;
             }
