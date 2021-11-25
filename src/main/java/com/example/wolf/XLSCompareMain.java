@@ -26,7 +26,7 @@ public class XLSCompareMain {
         options.addOption("o", "old", true, "Old XLSX file for compare");
         options.addOption("n", "new", true, "New XLSX file for compare");
         options.addOption("r", "result", true, "XLSX file for result");
-        options.addOption("m", "merge", true, "XLSX file with MxWeb requirements to merge");
+        options.addOption("m", "merge", true, "[XLSX file with MxWeb requirements to merge]");
         options.addOption("c", "columns", true, "Result columns count (13 by default, 21 maximum)");
         options.addOption("d", "directory", true, "Common directory for all input and output files");
 
