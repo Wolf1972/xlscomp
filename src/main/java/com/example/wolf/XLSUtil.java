@@ -132,9 +132,9 @@ public class XLSUtil {
      * @param columnStyles - styles for all columns
      */
     static void copyRow(XSSFSheet sourceWorksheet, XSSFSheet targetWorksheet,
-                                int sourceRowNum, int targetRowNum,
-                                int maxColumn,
-                                ArrayList<XSSFCellStyle> columnStyles) {
+                        int sourceRowNum, int targetRowNum,
+                        int maxColumn,
+                        ArrayList<XSSFCellStyle> columnStyles) {
         // Get the source / new row
         XSSFRow newRow = targetWorksheet.getRow(targetRowNum);
         XSSFRow sourceRow = sourceWorksheet.getRow(sourceRowNum);
