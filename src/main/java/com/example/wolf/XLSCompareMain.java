@@ -12,7 +12,7 @@ import java.util.*;
 public class XLSCompareMain {
 
     public static void main (String[] args) {
-        System.out.println("Compare for hierarchical requirements in XLSX.");
+        System.out.println("Compare for hierarchical requirements in XLSX. Version " + XLSCompareMain.class.getPackage().getImplementationVersion());
 
         String dir = System.getProperty("user.dir"); if (!dir.endsWith("\\")) dir += "\\"; // Current directory
 
