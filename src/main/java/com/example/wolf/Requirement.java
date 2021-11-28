@@ -17,22 +17,32 @@ public class Requirement extends BaseRequirement {
     String id; // Requirement id
     private Integer row; // Excel sheet row num (when requirement loads from Excel sheet)
     private Integer[] parentRows; // List of all parents Excel rows
-
-    private Integer level; // Requirement level
-    private String name; // Requirement
-    private String priority; // Requirement priority
-    private String done; // Requirement has realised
-    private String reference; // Requirement from other source (MarxxWeb)
-    private String integration; // Integration requirement
-    private String comment; // Comment for requirement
-    private String linked; // Linked requirement
-    private String version; // Plan to realised in version (13)
-    private String release; // Plan to realized in release (14)
-    private String questions; // Work questions for requirement (15)
-    private String source_req; // Requirement in source (16)
-    private String customize; // Requirement realizes by customize (17)
-    private String tt; // Team track task (18)
-    private String trello; // Trello task (19)
+    // Public columns
+    private Integer level; // A(0): Requirement level
+    private String name; // B(1): Requirement
+    private String priority; // C(2): Requirement priority
+    private String done; // D(3): Requirement has realised
+    private String reference; // E(4): Requirement from other source (MarxWeb)
+    private String new_req; // F(5): New requirement flag
+    private String integration; // G(6): Integration requirement
+    private String comment; // H(7): Comment for requirement
+    private String linked; // I(8): Linked requirement
+    private String curr_status; // J(9): Current status
+    private String type; // K(10): Requirement type
+    private String source; // L(11): Requirement source
+    private String foundation; // M(12): Requirement foundation
+    // Private columns
+    private String version; // N(13): Plan to realised in version
+    private String release; // O(14): Plan to realized in release
+    private String questions; // P(15): Work questions for requirement
+    private String source_req; // Q(16): Requirement in source
+    private String customize; // R(17): Requirement realizes by customize
+    private String tt; // S(18): Team track task
+    private String trello; // T(19): Trello task
+    private String primary; // U(20): Primary responsible
+    private String secondary; // V(21): Secondary responsible
+    private String risk; // W(22): Risk
+    private String risk_desc; // X(23): Risk description
 
     @Override
     public boolean equals(Object o) {
@@ -48,16 +58,27 @@ public class Requirement extends BaseRequirement {
         if (priority != null ? !priority.equals(that.priority) : that.priority != null) return false;
         if (done != null ? !done.equals(that.done) : that.done != null) return false;
         if (reference != null ? !reference.equals(that.reference) : that.reference != null) return false;
+        if (new_req != null ? !new_req.equals(that.new_req) : that.new_req != null) return false;
         if (integration != null ? !integration.equals(that.integration) : that.integration != null) return false;
         if (comment != null ? !comment.equals(that.comment) : that.comment != null) return false;
         if (linked != null ? !linked.equals(that.linked) : that.linked != null) return false;
+        if (curr_status != null ? !curr_status.equals(that.curr_status) : that.curr_status != null) return false;
+        if (type != null ? !type.equals(that.type) : that.type != null) return false;
+        if (source != null ? !source.equals(that.source) : that.source != null) return false;
+        if (foundation != null ? !foundation.equals(that.foundation) : that.foundation != null) return false;
+
         if (version != null ? !version.equals(that.version) : that.version != null) return false;
         if (release != null ? !release.equals(that.release) : that.release != null) return false;
         if (questions != null ? !questions.equals(that.questions) : that.questions != null) return false;
         if (source_req != null ? !source_req.equals(that.source_req) : that.source_req != null) return false;
         if (customize != null ? !customize.equals(that.customize) : that.customize != null) return false;
         if (tt != null ? !tt.equals(that.tt) : that.tt != null) return false;
-        return trello != null ? trello.equals(that.trello) : that.trello == null;
+        if (trello != null ? !trello.equals(that.trello) : that.trello != null) return false;
+        if (primary != null ? !primary.equals(that.primary) : that.primary != null) return false;
+        if (secondary != null ? !secondary.equals(that.secondary) : that.secondary != null) return false;
+        if (risk != null ? !risk.equals(that.risk) : that.risk != null) return false;
+        return risk_desc != null ? risk_desc.equals(that.risk_desc) : that.risk_desc == null;
+
     }
 
     @Override
@@ -69,9 +90,15 @@ public class Requirement extends BaseRequirement {
         result = 31 * result + (priority != null ? priority.hashCode() : 0);
         result = 31 * result + (done != null ? done.hashCode() : 0);
         result = 31 * result + (reference != null ? reference.hashCode() : 0);
+        result = 31 * result + (new_req != null ? new_req.hashCode() : 0);
         result = 31 * result + (integration != null ? integration.hashCode() : 0);
         result = 31 * result + (comment != null ? comment.hashCode() : 0);
         result = 31 * result + (linked != null ? linked.hashCode() : 0);
+        result = 31 * result + (curr_status != null ? curr_status.hashCode() : 0);
+        result = 31 * result + (type != null ? type.hashCode() : 0);
+        result = 31 * result + (source != null ? source.hashCode() : 0);
+        result = 31 * result + (foundation != null ? foundation.hashCode() : 0);
+
         result = 31 * result + (version != null ? version.hashCode() : 0);
         result = 31 * result + (release != null ? release.hashCode() : 0);
         result = 31 * result + (questions != null ? questions.hashCode() : 0);
@@ -79,6 +106,11 @@ public class Requirement extends BaseRequirement {
         result = 31 * result + (customize != null ? customize.hashCode() : 0);
         result = 31 * result + (tt != null ? tt.hashCode() : 0);
         result = 31 * result + (trello != null ? trello.hashCode() : 0);
+        result = 31 * result + (primary != null ? primary.hashCode() : 0);
+        result = 31 * result + (secondary != null ? secondary.hashCode() : 0);
+        result = 31 * result + (risk != null ? risk.hashCode() : 0);
+        result = 31 * result + (risk_desc != null ? risk_desc.hashCode() : 0);
+
         return result;
     }
 
@@ -115,10 +147,14 @@ public class Requirement extends BaseRequirement {
         if (cells > 2) priority = safeLoadString(xrow, 2); // Requirement priority
         if (cells > 3) done = safeLoadString(xrow,3); // Requirement has realised
         if (cells > 4) reference = safeLoadString(xrow, 4); // Requirement from other source (MarxxWeb)
-
+        if (cells > 5) new_req = safeLoadString(xrow, 5); // New requirement flag
         if (cells > 6) integration = safeLoadString(xrow, 6); // Integration requirement
         if (cells > 7) comment = safeLoadString(xrow, 7); // Comment for requirement
         if (cells > 8) linked = safeLoadString(xrow,8); // Linked requirement
+        if (cells > 9) curr_status = safeLoadString(xrow,9); // Requirement status
+        if (cells > 10) type = safeLoadString(xrow,10); // Requirement type
+        if (cells > 11) source = safeLoadString(xrow,11); // Requirement source
+        if (cells > 12) foundation = safeLoadString(xrow,12); // Requirement foundation
 
         if (cells > 13) version = safeLoadString(xrow,13); // Plan to realised in version
         if (cells > 14) release = safeLoadString(xrow, 14); // Plan to realized in release
@@ -127,6 +163,10 @@ public class Requirement extends BaseRequirement {
         if (cells > 17) customize = safeLoadString(xrow,17); // Requirement realizes by customize
         if (cells > 18) tt = safeLoadString(xrow,18); // Team track task
         if (cells > 19) trello = safeLoadString(xrow,19); // Trello task
+        if (cells > 20) primary = safeLoadString(xrow,20); // Primary responsible
+        if (cells > 21) secondary = safeLoadString(xrow,21); // Secondary responsible
+        if (cells > 22) risk = safeLoadString(xrow,22); // Risk
+        if (cells > 23) risk_desc = safeLoadString(xrow,23); // Risk description
 
         // Id evaluation - get all parent nodes
         int outlineLevel = xrow.getOutlineLevel();
@@ -170,11 +210,15 @@ public class Requirement extends BaseRequirement {
         cell = row.createCell(1); cell.setCellValue(name); // Requirement
         cell = row.createCell(2); cell.setCellValue(priority); // Requirement priority
         cell = row.createCell(3); cell.setCellValue(done); // Requirement has realised
-        cell = row.createCell(4); cell.setCellValue(reference); // Requirement from other source (MarxxWeb)
-
+        cell = row.createCell(4); cell.setCellValue(reference); // Requirement from other source (MarxWeb)
+        cell = row.createCell(5); cell.setCellValue(new_req); // New requirement flag
         cell = row.createCell(6); cell.setCellValue(integration); // Integration requirement
         cell = row.createCell(7); cell.setCellValue(comment); // Comment for requirement
         cell = row.createCell(8); cell.setCellValue(linked); // Linked requirement
+        cell = row.createCell(9); cell.setCellValue(curr_status); // Requirement status
+        cell = row.createCell(10); cell.setCellValue(type); // Requirement type
+        cell = row.createCell(11); cell.setCellValue(source); // Requirement source
+        cell = row.createCell(12); cell.setCellValue(foundation); // Requirement foundation
 
         cell = row.createCell(13); cell.setCellValue(version); // Plan to realised in version
         cell = row.createCell(14); cell.setCellValue(release); // Plan to realized in release
@@ -183,6 +227,11 @@ public class Requirement extends BaseRequirement {
         cell = row.createCell(17); cell.setCellValue(customize); // Realizes by customize
         cell = row.createCell(18); cell.setCellValue(tt); // Team track task
         cell = row.createCell(19); cell.setCellValue(trello); // Trello task
+        cell = row.createCell(20); cell.setCellValue(primary); // Primary responsibly
+        cell = row.createCell(21); cell.setCellValue(secondary); // Secondary responsibly
+        cell = row.createCell(22); cell.setCellValue(risk); // Risk
+        cell = row.createCell(23); cell.setCellValue(risk_desc); // Risk description
+
     }
 
     /**

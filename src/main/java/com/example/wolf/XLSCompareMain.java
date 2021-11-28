@@ -12,7 +12,16 @@ import java.util.*;
 public class XLSCompareMain {
 
     public static void main (String[] args) {
-        System.out.println("Compare for hierarchical requirements in XLSX. Version " + XLSCompareMain.class.getPackage().getImplementationVersion());
+
+        final Properties properties = new Properties();
+        try {
+            properties.load(XLSCompareMain.class.getClassLoader().getResourceAsStream("project.properties"));
+        }
+        catch (IOException e) {
+            System.out.println("Error reading resource file.");
+        }
+
+        System.out.println("Compare for hierarchical requirements in XLSX. Version " + properties.getProperty("version"));
 
         String dir = System.getProperty("user.dir"); if (!dir.endsWith("\\")) dir += "\\"; // Current directory
 
@@ -26,9 +35,10 @@ public class XLSCompareMain {
         options.addOption("o", "old", true, "Old XLSX file for compare");
         options.addOption("n", "new", true, "New XLSX file for compare");
         options.addOption("r", "result", true, "XLSX file for result");
-        options.addOption("m", "merge", true, "[XLSX file with MxWeb requirements to merge]");
-        options.addOption("c", "columns", true, "Result columns count (13 by default, 21 maximum)");
+        options.addOption("m", "mxweb", true, "[XLSX file with MxWeb requirements to check]");
+        options.addOption("c", "columns", true, "Result columns count (13 public columns by default)");
         options.addOption("d", "directory", true, "Common directory for all input and output files");
+        options.addOption("h", "help", true, "Print this message");
 
         CommandLineParser parser = new DefaultParser();
         try {
@@ -40,6 +50,11 @@ public class XLSCompareMain {
             if (command.hasOption('o')) { oldFile = command.getOptionValue('o'); }
             if (command.hasOption('m')) { mergeFile = command.getOptionValue('m'); }
             if (command.hasOption('c')) cmdColumns = command.getOptionValue('c');
+            if (command.hasOption('h')) {
+                HelpFormatter formatter = new HelpFormatter();
+                formatter.printHelp(properties.getProperty("artifactId"), options);
+                return;
+            }
         }
         catch (ParseException e) {
             System.out.println("Command line parse exception.");
@@ -69,11 +84,11 @@ public class XLSCompareMain {
      * Compare requirements procedure
      * @param oldName - old file name
      * @param newName - new file name for compare
-     * @param mxwebName - file name with mxweb requirements
+     * @param mxWebName - file name with mxweb requirements
      * @param resultName - file name for result
      * @param maxColumn - last column to copy (to prevent copying service secured columns), when = 0 - copying all columns from row
      */
-    private static void doCompare(String oldName, String newName, String mxwebName, String resultName, int maxColumn) {
+    private static void doCompare(String oldName, String newName, String mxWebName, String resultName, int maxColumn) {
 
         String fileName = "?";
         try {
@@ -114,11 +129,11 @@ public class XLSCompareMain {
             LinkedHashMap<String, Requirement> mergedMap = new LinkedHashMap<>(); // Rows were merged without errors
             LinkedHashMap<Integer, MxRequirement> missedMap = new LinkedHashMap<>(); // Rows with MxWeb requirements were missed when merge
 
-            if (mxwebName != null) {
+            if (mxWebName != null) {
 
-                System.out.println("Trying to merge...");
+                System.out.println("Trying to check with MxWeb requirements...");
 
-                fileName = mxwebName;
+                fileName = mxWebName;
                 System.out.println("Loading mxweb file " + fileName);
                 LinkedHashMap<Integer, MxRequirement> mxwebMap = MxRequirement.readFromExcel(fileName);
                 System.out.println("Rows loaded: " + mxwebMap.size());
@@ -196,7 +211,7 @@ public class XLSCompareMain {
                     }
                 }
 
-                System.out.println("Merged.");
+                System.out.println("MxWeb requirements checked.");
             }
 
             outResult(oldName, newName, resultName, maxColumn, addedMap, deletedMap, mergedMap, missedMap);
