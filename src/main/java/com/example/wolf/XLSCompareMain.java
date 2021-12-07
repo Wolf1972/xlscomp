@@ -1,5 +1,9 @@
 package com.example.wolf;
 
+// TODO: merge cells to Current and Changed sheets (if specified)
+// TODO: change copySheetWithFilter to remove common code with markOneSheet
+// TODO: try to build "Added", "Deleted", "Changed" sheets with collapsed parent rows
+
 import org.apache.commons.cli.*;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.*;
@@ -36,7 +40,7 @@ public class XLSCompareMain {
         options.addOption("o", "old", true, "Old XLSX file for compare");
         options.addOption("n", "new", true, "New XLSX file for compare");
         options.addOption("r", "result", true, "XLSX file for result");
-        options.addOption("m", "merge", true, "Merge cells for common rows from old file to new (a - all. e - if only new cell is empty)");
+        options.addOption("m", "merge", true, "Merge cells for common rows from old file to new (a - all, e - if only new cell is empty)");
         options.addOption("w", "mxweb", true, "[XLSX file with MxWeb requirements to match]");
         options.addOption("c", "columns", true, "Result columns count (25 columns by default)");
         options.addOption("d", "directory", true, "Common directory for all input and output files");
@@ -272,12 +276,12 @@ public class XLSCompareMain {
 
             XSSFSheet oldSheet = book.createSheet("Old");
             XLSUtil.copySheet(oldFileName, oldSheet, maxColumn);
-//            if (deletedMap.size() > 0) markOneSheet(oldSheet, deletedMap, null, true);
+            if (deletedMap.size() > 0) markOneSheet(oldSheet, deletedMap, null, true);
             if (changedMap.size() > 0) markOneSheet(oldSheet, changedMap, changedDetailsMap, null);
 
             XSSFSheet newSheet = book.createSheet("New");
             XLSUtil.copySheet(newFileName, newSheet, maxColumn);
-//            if (addedMap.size() > 0) markOneSheet(newSheet, addedMap, null, false);
+            if (addedMap.size() > 0) markOneSheet(newSheet, addedMap, null, false);
             if (changedMap.size() > 0) markOneSheet(newSheet, changedMap, changedDetailsMap, null);
 
             if (deletedMap.size() > 0) {
@@ -305,6 +309,8 @@ public class XLSCompareMain {
             if (changedMap.size() > 0) {
                 XSSFSheet changedSheet = book.createSheet("Changed");
                 copySheetWithFilter(newSheet, changedSheet, changedMap, null, maxColumn);
+
+                markOneSheet(newSheet, changedMap, changedDetailsMap, null);
                 System.out.println("* Changed rows: " + changedMap.size());
             }
             else {
@@ -355,6 +361,29 @@ public class XLSCompareMain {
             }
             catch (IOException e) {
                 System.out.println("Error saving file: " + resultFileName);
+            }
+        }
+    }
+
+    /**
+     * Deletes all rows from sheet according requirements in specified map
+     * @param sheet - sheet to delete rows
+     * @param array - array with specified rows to delete
+     */
+    private static void deleteRows(XSSFSheet sheet, LinkedHashMap<String, Requirement> array) {
+
+        int lastRow = sheet.getLastRowNum();
+        Requirement req = new Requirement();
+
+        for (int i = lastRow; i >= 0; i--) {
+
+            if (i <= Requirement.HEADER_LAST_ROW) continue; // Skip header
+
+            XSSFRow row = sheet.getRow(i);
+            req.loadFromRow(row);
+
+            if (array.containsKey(req.id)) {
+                sheet.removeRow(row);
             }
         }
     }
