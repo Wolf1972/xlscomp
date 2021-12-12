@@ -8,6 +8,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 public class XLSUtil {
     /**
@@ -20,21 +21,6 @@ public class XLSUtil {
      * @param maxColumn - last column to copy (to prevent copying service secured columns), when = 0 - copying all columns from row
      */
     static void copySheet(String sourceFile, XSSFSheet targetSheet, int maxColumn) {
-
-        class Group { // Item for rows grouping
-            private int start;
-            private int end;
-            private int level;
-            private boolean closed;
-            private Group(int start, int end, int level) {
-                this.start = start;
-                this.end = end;
-                this.level = level;
-                this.closed = false;
-            }
-        }
-
-        ArrayList<Group> groups = new ArrayList<>();
 
         // Common styles for all group levels (with outline levels)
         HashMap<Integer, ArrayList<XSSFCellStyle>> groupStyles = new HashMap<>();
@@ -49,30 +35,6 @@ public class XLSUtil {
             for (int i = 0; i <= lastRow; i++) {
 
                 int outlineLevel = sourceSheet.getRow(i).getOutlineLevel();
-
-                if (i > Requirement.HEADER_LAST_ROW && outlineLevel >= 0) {
-
-                    int specifiedOutlineLevel = (int) sourceSheet.getRow(i).getCell(0).getNumericCellValue();
-                    if (outlineLevel + 1 != specifiedOutlineLevel) {
-                        System.out.println("ERROR in row " + (i + 1) + ". Real row outline level " + (outlineLevel + 1) + " doesn't suite with level has specified in first column: " + specifiedOutlineLevel);
-                    }
-
-                    if (oldOutlineLevel != outlineLevel) {
-                        if (oldOutlineLevel < outlineLevel) { // Dive! Dive! Dive
-                            groups.add(new Group(i, 0, outlineLevel));
-                        } else { // Surfacing!
-                            for (int g = outlineLevel; g <= oldOutlineLevel; g++) { // May be close several groups in the same time
-                                for (Group group : groups) {
-                                    if (!group.closed && group.level == g + 1) {
-                                        group.end = i - 1;
-                                        group.closed = true;
-                                    }
-                                }
-                            }
-                        }
-                        oldOutlineLevel = outlineLevel;
-                    }
-                }
 
                 ArrayList<XSSFCellStyle> styles = new ArrayList<>(); // Styles for current row
 
@@ -94,29 +56,102 @@ public class XLSUtil {
                 else {
                     styles = groupStyles.get(outlineLevel); // Use common style has already defined
                 }
-                copyRow(sourceSheet, targetSheet, i, i, maxColumn, styles);
+                copyRow(sourceSheet, targetSheet, true, i, i, maxColumn, null, false, styles);
             }
 
             sourceBook.close();
-
-            for (Group group : groups) { // Close all unclosed groups with last row
-                if (!group.closed) {
-                    group.end = lastRow;
-                    group.closed = true;
-                }
-            }
 
         }
         catch (IOException e) {
             System.out.println("Error while reading source sheet: " + sourceFile);
         }
 
-        targetSheet.setRowSumsBelow(false); // Set group header at the top of group
-        for (Group group : groups) {
-            // System.out.println(group.start + " : " + group.end + " - " + group.level);
-            targetSheet.groupRow(group.start, group.end);
+    }
+
+    /**
+     * Function check for according between row outline level and group number (specified in 1st column)
+     * List of errors outputs to console
+     * @param sheet - sheet for processing
+     * @param startRow - start row for check (till end row of sheet)
+     * @return - when true - all Ok, when false - sheet contain errors
+     */
+    static boolean checkSheetOutline(XSSFSheet sheet, int startRow) {
+        boolean result = true;
+        int lastRow = sheet.getLastRowNum();
+
+        for (int i = startRow; i <= lastRow; i++) {
+
+            int outlineLevel = (int) sheet.getRow(i).getOutlineLevel();
+            int specifiedOutlineLevel = (int) sheet.getRow(i).getCell(0).getNumericCellValue();
+
+            if ((outlineLevel + 1) != specifiedOutlineLevel) {
+                System.out.println("ERROR in row " + (i + 1) + ". Real row outline level " + (outlineLevel + 1) + " doesn't suite with level has specified in first column: " + specifiedOutlineLevel);
+                result = false;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Function groups all rows in specified sheet by outline level (outline level takes from 1st column)
+     * @param sheet - sheet to group by
+     * @param startRow - start row for grouping (till end row of sheet)
+     */
+    static void groupSheet(XSSFSheet sheet, int startRow) {
+
+        class Group { // Item for rows grouping
+            private int start;
+            private int end;
+            private int level;
+            private boolean closed;
+            private Group(int start, int end, int level) {
+                this.start = start;
+                this.end = end;
+                this.level = level;
+                this.closed = false;
+            }
         }
 
+        ArrayList<Group> groups = new ArrayList<>();
+
+        int oldOutlineLevel = 0;
+        int lastRow = sheet.getLastRowNum();
+
+        for (int i = startRow; i <= lastRow; i++) {
+
+            int outlineLevel = (int) sheet.getRow(i).getCell(0).getNumericCellValue() - 1;
+
+            if (outlineLevel >= 0) {
+
+                if (oldOutlineLevel != outlineLevel) {
+                    if (oldOutlineLevel < outlineLevel) { // Dive! Dive! Dive
+                        groups.add(new Group(i, 0, outlineLevel));
+                    } else { // Surfacing!
+                        for (int g = outlineLevel; g <= oldOutlineLevel; g++) { // May be close several groups in the same time
+                            for (Group group : groups) {
+                                if (!group.closed && group.level == g + 1) {
+                                    group.end = i - 1;
+                                    group.closed = true;
+                                }
+                            }
+                        }
+                    }
+                    oldOutlineLevel = outlineLevel;
+                }
+            }
+        }
+        for (Group group : groups) { // Close all unclosed groups with last row
+            if (!group.closed) {
+                group.end = lastRow;
+                group.closed = true;
+            }
+        }
+
+        sheet.setRowSumsBelow(false); // Set group header at the top of group
+        for (Group group : groups) {
+            // System.out.println(group.start + " : " + group.end + " - " + group.level);
+            sheet.groupRow(group.start, group.end);
+        }
     }
 
     /**
@@ -129,28 +164,38 @@ public class XLSUtil {
      * @param sourceRowNum = source row number
      * @param targetRowNum - destination row number
      * @param maxColumn - last column to copy (to prevent copying service secured columns), when = 0 - copying all columns from row
-     * @param columnStyles - styles for all columns
+     * @param onlyColumns - copy only rows specified in this array (when null - this filter is not applying)
+     * @param isOnlyEmpty - when true: copy only empty cells in target sheet, when false - any cells
+     * @param columnStyles - styles for all columns (may be null)
      */
-    static void copyRow(XSSFSheet sourceWorksheet, XSSFSheet targetWorksheet,
+    static void copyRow(XSSFSheet sourceWorksheet, XSSFSheet targetWorksheet, boolean isAppend,
                         int sourceRowNum, int targetRowNum,
                         int maxColumn,
+                        List<Integer> onlyColumns,
+                        boolean isOnlyEmpty,
                         ArrayList<XSSFCellStyle> columnStyles) {
         // Get the source / new row
         XSSFRow newRow = targetWorksheet.getRow(targetRowNum);
         XSSFRow sourceRow = sourceWorksheet.getRow(sourceRowNum);
 
-        // If the row exist in destination, push down all rows by 1 else create a new row
-        if (newRow != null) {
-            targetWorksheet.shiftRows(targetRowNum, targetWorksheet.getLastRowNum(), 1);
-        } else {
-            newRow = targetWorksheet.createRow(targetRowNum);
+        if (isAppend) {
+            // If the row exist in destination, push down all rows by 1 else create a new row
+            if (newRow != null) {
+                targetWorksheet.shiftRows(targetRowNum, targetWorksheet.getLastRowNum(), 1);
+            } else {
+                newRow = targetWorksheet.createRow(targetRowNum);
+            }
         }
+        else
+            newRow = targetWorksheet.getRow(targetRowNum);
 
         // Loop through source columns to add to new row
         for (int i = 0; i < sourceRow.getLastCellNum(); i++) {
+
             // Grab a copy of the old/new cell
             XSSFCell oldCell = sourceRow.getCell(i);
-            XSSFCell newCell = newRow.createCell(i);
+            XSSFCell newCell = newRow.getCell(i);
+            if (newCell == null) newCell = newRow.createCell(i);
 
             // Do not copy service columns
             if ((maxColumn > 0) && (i > maxColumn)) {
@@ -159,6 +204,9 @@ public class XLSUtil {
             // If the old cell is null jump to next cell (may be merged cells?)
             if (oldCell == null) {
                 continue;
+            }
+            if (onlyColumns != null) {
+                if (!onlyColumns.contains(i)) continue;
             }
 
             if (columnStyles != null && i < columnStyles.size()) {
@@ -177,6 +225,16 @@ public class XLSUtil {
             if (oldCell.getHyperlink() != null) {
                 newCell.setHyperlink(oldCell.getHyperlink());
             }
+
+            boolean isNeedCopy = true;
+            if (isOnlyEmpty) {
+                isNeedCopy = false;
+                CellType newType = newCell.getCellType();
+                if (newType == CellType.BLANK) isNeedCopy = true;
+                if (!isNeedCopy && (newType == CellType.STRING) && !oldCell.getRichStringCellValue().getString().isEmpty()) isNeedCopy = true;
+                if (!isNeedCopy && (newType == CellType.NUMERIC) && oldCell.getNumericCellValue() != 0) isNeedCopy = true;
+            }
+            if (!isNeedCopy) continue;
 
             // Set the cell data value
             CellType type = oldCell.getCellType();

@@ -174,7 +174,7 @@ public class Requirement extends BaseRequirement {
 
         // Id evaluation - get all parent nodes
         int outlineLevel = xrow.getOutlineLevel();
-        if ((outlineLevel + 1) != level) {
+        if ((outlineLevel + 1)!= level) {
             System.out.println("ERROR. Value specified in the first column for row " + (row + 1) + " has level " + level + " mismatches with outline level: " + (outlineLevel + 1));
         }
         int parentRow = row;
@@ -310,6 +310,13 @@ public class Requirement extends BaseRequirement {
             if (array.containsKey(req.id)) {
                 System.out.println("ERROR. Row " + (rowNum + 1) + " contains requirement was already loaded before for row " + (array.get(req.id).getRow() + 1));
             }
+
+            int outlineLevel = sheet.getRow(rowNum).getOutlineLevel();
+            int specifiedOutlineLevel = (int) sheet.getRow(rowNum).getCell(0).getNumericCellValue();
+            if ((outlineLevel + 1) != specifiedOutlineLevel) {
+                System.out.println("ERROR in row " + (rowNum + 1) + ". Real row outline level " + (outlineLevel + 1) + " doesn't suite with level has specified in first column: " + specifiedOutlineLevel);
+            }
+
             array.put(req.id, req);
 
         }
