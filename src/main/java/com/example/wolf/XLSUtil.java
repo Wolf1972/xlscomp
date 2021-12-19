@@ -1,6 +1,8 @@
 package com.example.wolf;
 
 import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.*;
 
@@ -29,29 +31,20 @@ public class XLSUtil {
 
             XSSFWorkbook sourceBook = new XSSFWorkbook(new FileInputStream(sourceFile));
             XSSFSheet sourceSheet = sourceBook.getSheetAt(0);
-            int oldOutlineLevel = 0;
+
+            copyHeader(sourceSheet, targetSheet, maxColumn); // Copy header
+
             int lastRow = sourceSheet.getLastRowNum();
 
-            for (int i = 0; i <= lastRow; i++) {
+            ArrayList<XSSFCellStyle> styles = new ArrayList<>();
+
+            for (int i = Requirement.HEADER_LAST_ROW + 1; i <= lastRow; i++) {
 
                 int outlineLevel = sourceSheet.getRow(i).getOutlineLevel();
-
-                ArrayList<XSSFCellStyle> styles = new ArrayList<>(); // Styles for current row
-
-                if (i <= Requirement.HEADER_LAST_ROW || !groupStyles.containsKey(outlineLevel)) {
-                    // Styles for header row or row with unknown outline level
-                    // Copy style from old cell and apply to new cell: all styles after specified row are common - takes it from array
-                    for (int j = 0; j < sourceSheet.getRow(i).getLastCellNum(); j++) {
-                        XSSFCell cell = sourceSheet.getRow(i).getCell(j);
-                        if (cell != null) { // Sometimes we can not obtain some cell even if j < getLastCellNum (possible - merged cells?)
-                            XSSFCellStyle newCellStyle = targetSheet.getWorkbook().createCellStyle();
-                            newCellStyle.cloneStyleFrom(cell.getCellStyle());
-                            styles.add(newCellStyle);
-                        }
-                    }
-                    if (i > Requirement.HEADER_LAST_ROW) { // For regular rows with requirement add common style for outline level
-                        groupStyles.put(outlineLevel, styles);
-                    }
+                if (!groupStyles.containsKey(outlineLevel)) {
+                    styles = getRowStyles(sourceSheet, i, maxColumn);
+                    styles = cloneRowStyles(targetSheet, styles);
+                    groupStyles.put(outlineLevel, styles);
                 }
                 else {
                     styles = groupStyles.get(outlineLevel); // Use common style has already defined
@@ -65,7 +58,106 @@ public class XLSUtil {
         catch (IOException e) {
             System.out.println("Error while reading source sheet: " + sourceFile);
         }
+    }
 
+    /**
+     * Method copies only header of sheet
+     * @param sourceSheet - source sheet
+     * @param targetSheet - target sheet
+     * @param maxColumn - max column to copy (to prevent copying service secured columns), when = 0 - copying all columns from row
+     */
+    static void copyHeader(XSSFSheet sourceSheet, XSSFSheet targetSheet, int maxColumn) {
+
+        for (int i = 0; i <= Requirement.HEADER_LAST_ROW; i++) {
+            ArrayList<XSSFCellStyle> styles = getRowStyles(sourceSheet, i, maxColumn);
+            styles = cloneRowStyles(targetSheet, styles);
+            copyRow(sourceSheet, targetSheet, true, i, i, maxColumn, null, false, styles);
+        }
+    }
+
+    /**
+     * Returns array with all column styles
+     * @param sourceSheet - sheet to get styles
+     * @param rowNum - row to get styles
+     * @param maxColumn - max column to copy (to prevent copying service secured columns), when = 0 - copying all columns from row
+     * @return - array with styles
+     */
+    static ArrayList<XSSFCellStyle> getRowStyles(XSSFSheet sourceSheet, int rowNum , int maxColumn) {
+        ArrayList<XSSFCellStyle> styles = new ArrayList<>(); // Styles for current row
+        XSSFRow row = sourceSheet.getRow(rowNum);
+        if (row != null) {
+            for (int j = 0; j < row.getLastCellNum(); j++) {
+                if (j > maxColumn) break;
+                XSSFCell cell = row.getCell(j);
+                if (cell != null) { // Sometimes we can not obtain some cell even if j < getLastCellNum (possible - merged cells?)
+                    styles.add(cell.getCellStyle());
+                }
+            }
+        }
+        else {
+            System.out.println("ERROR. There is no source row " + rowNum + " in source sheet" + sourceSheet.getSheetName());
+        }
+        return styles;
+    }
+
+    /**
+     * Clones styles array into target sheet
+     * @param sheet - target sheet
+     * @param styles - styles
+     * @return - array with styles were cloned
+     */
+    static ArrayList<XSSFCellStyle> cloneRowStyles(XSSFSheet sheet, ArrayList<XSSFCellStyle> styles) {
+        ArrayList<XSSFCellStyle> newStyles = new ArrayList<>();
+        if (styles != null) {
+            for (int i = 0; i < styles.size(); i++) {
+                XSSFCellStyle newCellStyle = sheet.getWorkbook().createCellStyle();
+                newCellStyle.cloneStyleFrom(styles.get(i));
+                newStyles.add(newCellStyle);
+            }
+        }
+        return newStyles;
+    }
+
+    /**
+     * Modifies cell styles according with mode (deleted, addede, changed or parent mode)
+     * @param sheet - target sheet
+     * @param row - row for styles modify
+     * @param mark - row mark type (DELETED, CHANGED, ADDED, PARENT or null)
+     */
+    static ArrayList<XSSFCellStyle> modifyCellStyles(XSSFSheet sheet, XSSFRow row, MarkRowType mark) {
+        ArrayList<XSSFCellStyle> styles = new ArrayList<>();
+        for (int j = 0; j < row.getLastCellNum(); j++) {
+            XSSFCell cell = row.getCell(j);
+            XSSFCellStyle newCellStyle = sheet.getWorkbook().createCellStyle();
+            newCellStyle.cloneStyleFrom(cell.getCellStyle());
+            Font font = sheet.getWorkbook().createFont();
+            if (mark != null) {
+                switch (mark) {
+                    case DELETED: {
+                        font.setBold(true);
+                        font.setStrikeout(true);
+                        break;
+                    }
+                    case ADDED: {
+                        font.setBold(true);
+                        font.setColor(IndexedColors.RED.getIndex());
+                        break;
+                    }
+                    case CHANGED: {
+                        font.setBold(true);
+                        font.setColor(IndexedColors.BLUE.getIndex());
+                        break;
+                    }
+                    case PARENT: {
+                        font.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
+                        break;
+                    }
+                }
+                newCellStyle.setFont(font);
+                styles.add(newCellStyle);
+            }
+        }
+        return styles;
     }
 
     /**

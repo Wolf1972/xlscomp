@@ -122,6 +122,10 @@ public class Requirement extends BaseRequirement {
         return row;
     }
 
+    public String getName() {
+        return name;
+    }
+
     public String getReference() {
         return reference;
     }

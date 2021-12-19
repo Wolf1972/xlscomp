@@ -1,9 +1,5 @@
 package com.example.wolf;
 
-// TODO: merge cells to Current and Changed sheets (if specified)
-// TODO: change copySheetWithFilter to remove common code with markOneSheet
-// TODO: try to build "Added", "Deleted", "Changed" sheets with collapsed parent rows
-
 import org.apache.commons.cli.*;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.*;
@@ -138,8 +134,9 @@ public class XLSCompareMain {
             LinkedHashMap<String, List<Integer>> changedMapDetails = new LinkedHashMap<>(); // Map with columns has changed for every row has changed
 
             if (mergeMode != null && !mergeMode.isEmpty()) {
-//                copyOldToNew(oldSheet, newSheet, oldMap, newMap, !mergeMode.contains("a"), maxColumn);
-                copyOldToNew(oldSheet, currentSheet, oldMap, newMap, !mergeMode.contains("a"), maxColumn);
+                // Copy old sheet to both sheets: Current and New (they are same)
+                mergeSheet(oldSheet, currentSheet, oldMap, newMap, !mergeMode.contains("a"), maxColumn, false);
+                mergeSheet(oldSheet, newSheet, oldMap, newMap, !mergeMode.contains("a"), maxColumn, true);
             }
 
             for (Map.Entry<String, Requirement> item : oldMap.entrySet()) {
@@ -232,17 +229,18 @@ public class XLSCompareMain {
             XSSFSheet currentSheet = book.getSheet("Current");
 
             XSSFSheet oldSheet = book.getSheet("Old");
-            if (deletedMap.size() > 0) markOneSheet(oldSheet, deletedMap, null, true);
-            if (changedMap.size() > 0) markOneSheet(oldSheet, changedMap, changedDetailsMap, null);
+            if (deletedMap.size() > 0) markOneSheet(oldSheet, deletedMap, null, MarkRowType.DELETED);
+            if (changedMap.size() > 0) markOneSheet(oldSheet, changedMap, changedDetailsMap, MarkRowType.CHANGED);
 
             XSSFSheet newSheet = book.getSheet("New");
-            if (addedMap.size() > 0) markOneSheet(newSheet, addedMap, null, false);
-            if (changedMap.size() > 0) markOneSheet(newSheet, changedMap, changedDetailsMap, null);
+            if (addedMap.size() > 0) markOneSheet(newSheet, addedMap, null, MarkRowType.ADDED);
+            if (changedMap.size() > 0) markOneSheet(newSheet, changedMap, changedDetailsMap, MarkRowType.CHANGED);
 
             if (deletedMap.size() > 0) {
                 XSSFSheet delSheet = book.createSheet("Deleted");
-                copySheetWithFilter(oldSheet, delSheet, deletedMap, true, maxColumn);
-                XLSUtil.groupSheet(delSheet, 0);
+                XLSUtil.copyHeader(oldSheet, delSheet, maxColumn);
+                copySheetWithFilter(oldSheet, delSheet, deletedMap, maxColumn);
+                XLSUtil.groupSheet(delSheet, Requirement.HEADER_LAST_ROW + 1);
                 System.out.println("- Deleted rows: " + deletedMap.size());
             }
             else {
@@ -251,8 +249,9 @@ public class XLSCompareMain {
 
             if (addedMap.size() > 0) {
                 XSSFSheet addSheet = book.createSheet("Added");
-                copySheetWithFilter(newSheet, addSheet, addedMap, false, maxColumn);
-                XLSUtil.groupSheet(addSheet, 0);
+                XLSUtil.copyHeader(oldSheet, addSheet, maxColumn);
+                copySheetWithFilter(newSheet, addSheet, addedMap, maxColumn);
+                XLSUtil.groupSheet(addSheet, Requirement.HEADER_LAST_ROW + 1);
                 System.out.println("+ Added rows: " + addedMap.size());
             }
             else {
@@ -261,11 +260,11 @@ public class XLSCompareMain {
 
             if (changedMap.size() > 0) {
                 XSSFSheet changedSheet = book.createSheet("Changed");
-                copySheetWithFilter(newSheet, changedSheet, changedMap, null, maxColumn);
-                XLSUtil.groupSheet(changedSheet, 0);
-                markOneSheet(newSheet, changedMap, changedDetailsMap, null);
-                markOneSheet(changedSheet, changedMap, changedDetailsMap, null);
-
+                XLSUtil.copyHeader(newSheet, changedSheet, maxColumn);
+                copySheetWithFilter(newSheet, changedSheet, changedMap, maxColumn);
+                XLSUtil.groupSheet(changedSheet, Requirement.HEADER_LAST_ROW + 1);
+                markOneSheet(newSheet, changedMap, changedDetailsMap, MarkRowType.CHANGED);
+                markOneSheet(changedSheet, changedMap, changedDetailsMap, MarkRowType.CHANGED);
                 System.out.println("* Changed rows: " + changedMap.size());
             }
             else {
@@ -277,7 +276,7 @@ public class XLSCompareMain {
                     XSSFSheet matchedSheet = book.createSheet("MX Matched");
                     XLSUtil.copySheet(newFileName, matchedSheet, maxColumn);
                     XLSUtil.groupSheet(matchedSheet, Requirement.HEADER_LAST_ROW + 1);
-                    markOneSheet(matchedSheet, matchedMap, null,false);
+                    markOneSheet(matchedSheet, matchedMap, null,MarkRowType.CHANGED);
                     System.out.println("= MxWeb matched rows: " + matchedMap.size());
                     // Output matched results
                     int maxRow = matchedSheet.getLastRowNum();
@@ -343,15 +342,18 @@ public class XLSCompareMain {
      * @param oldMap - old requirement
      * @param newMap - new requirement
      * @param isEmptyOnly - copy mode (when true: only empty cells in new sheet, false: all cells than have difference with old cells)
+     * @param maxColumn - max number of columns
+     * @param isNewRefresh - when true: refresh newMap with requirements that have been copied
      * @return - map with requirements were copied
      */
-    private static LinkedHashMap<String, Requirement> copyOldToNew(XSSFSheet oldSheet, XSSFSheet newSheet,
-                                                                   LinkedHashMap <String, Requirement> oldMap,
-                                                                   LinkedHashMap <String, Requirement> newMap,
-                                                                   boolean isEmptyOnly,
-                                                                   int maxColumn) {
+    private static LinkedHashMap<String, Requirement> mergeSheet(XSSFSheet oldSheet, XSSFSheet newSheet,
+                                                                 LinkedHashMap <String, Requirement> oldMap,
+                                                                 LinkedHashMap <String, Requirement> newMap,
+                                                                 boolean isEmptyOnly,
+                                                                 int maxColumn,
+                                                                 boolean isNewRefresh) {
 
-        System.out.println("Copying old requirements attributes to new " + (isEmptyOnly ? "(only empty cells)":"(all different cells)" + "..."));
+        System.out.println("Copying requirements attributes from " + oldSheet.getSheetName() + " to " + newSheet.getSheetName() + " " + (isEmptyOnly ? "(only empty cells)":"(all different cells)" + "..."));
 
         LinkedHashMap<String, Requirement> copiedMap = new LinkedHashMap<>();
 
@@ -364,11 +366,11 @@ public class XLSCompareMain {
                     List<Integer> changedColumns = newReq.compare(req);
                     if (changedColumns != null && changedColumns.size() > 0) {
                         copiedMap.put(key, req);
-                        System.out.print("Copy row " + req.getRow() + " to row " + newReq.getRow() + ", columns " + changedColumns + "... ");
+//                        System.out.print("Copy row " + req.getRow() + " to row " + newReq.getRow() + ", columns " + changedColumns + "... ");
                         XLSUtil.copyRow(oldSheet, newSheet, false, req.getRow(), newReq.getRow(), maxColumn, changedColumns, isEmptyOnly, null);
                         XSSFRow newRow = newSheet.getRow(newReq.getRow());
-                        newReq.loadFromRow(newRow); // Refresh new requirement with copying results
-                        System.out.println("Done.");
+                        if (isNewRefresh) newReq.loadFromRow(newRow); // Refresh new requirement with copying results
+//                        System.out.println("Done.");
                     }
                 }
             }
@@ -378,14 +380,14 @@ public class XLSCompareMain {
     }
 
     /**
-     * Mark rows in specified sheet according requirements in specified map. Mark style depends on isDeleted flag
+     * Mark rows in specified sheet according requirements in specified map. Mark style depends on specified type
      * @param sheet - sheet to mark
      * @param array - array with specified rows (deleted, added or changed)
      * @param columnDetails - array with column indexes have to be marked (required for changed rows only)
-     * @param isDeleted - when true rows mark as grey strikeout (deleted), when false - mark as red (inserted), when null - mark only columns in columnDetails
+     * @param mark - mark type (deleted, inserted or changed)
      */
     private static void markOneSheet(XSSFSheet sheet, LinkedHashMap<String, Requirement> array,
-                                     LinkedHashMap<String, List<Integer>> columnDetails, Boolean isDeleted) {
+                                     LinkedHashMap<String, List<Integer>> columnDetails, MarkRowType mark) {
 
         int lastRow = sheet.getLastRowNum();
         Requirement req = new Requirement();
@@ -393,9 +395,7 @@ public class XLSCompareMain {
         // Common styles for all group levels (with outline levels)
         HashMap<Integer, ArrayList<XSSFCellStyle>> groupStyles = new HashMap<>();
 
-        for (int i = 0; i <= lastRow; i++) {
-
-            if (i <= Requirement.HEADER_LAST_ROW) continue; // Skip header
+        for (int i = Requirement.HEADER_LAST_ROW + 1; i <= lastRow; i++) {
 
             XSSFRow row = sheet.getRow(i);
             req.loadFromRow(row);
@@ -408,7 +408,7 @@ public class XLSCompareMain {
 
             if (array.containsKey(req.id)) {
 
-                if (columnDetails != null) {
+                if (columnDetails != null) { // When change mode we have to check according between changed rows and changed details (columns) for each row
                     markedColumns = columnDetails.get(req.id);
                     if (markedColumns == null) {
                         System.out.println("ERROR: arrays mismatch - can't obtain changes details for row " + i);
@@ -416,32 +416,8 @@ public class XLSCompareMain {
                     }
                 }
 
-                if (!groupStyles.containsKey(outlineLevel)) {
-                    // Styles for row with unknown outline level
-                    // Copy style from existing cell and correct: all styles after specified row are common - takes it from array
-
-                    for (int j = 0; j < row.getLastCellNum(); j++) {
-                        XSSFCell cell = row.getCell(j);
-                        XSSFCellStyle newCellStyle = sheet.getWorkbook().createCellStyle();
-                        newCellStyle.cloneStyleFrom(cell.getCellStyle());
-                        Font font = sheet.getWorkbook().createFont();
-                        if (isDeleted != null) {
-                            if (isDeleted) {
-                                font.setBold(true);
-                                font.setStrikeout(true);
-                                font.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
-                            } else {
-                                font.setBold(true);
-                                font.setColor(IndexedColors.RED.getIndex());
-                            }
-                        }
-                        else { // Mark changed rows (only specified columns)
-                            font.setBold(true);
-                            font.setColor(IndexedColors.BLUE.getIndex());
-                        }
-                        newCellStyle.setFont(font);
-                        styles.add(newCellStyle);
-                    }
+                if (!groupStyles.containsKey(outlineLevel)) { // Styles for row with new outline level
+                    styles = XLSUtil.modifyCellStyles(sheet, row, mark);
                     groupStyles.put(outlineLevel, styles);
                 }
 
@@ -474,28 +450,26 @@ public class XLSCompareMain {
      * @param sourceSheet - source sheet
      * @param targetSheet - source sheet
      * @param filterMap - array with specified rows
-     * @param isDeleted - when true rows mark as grey strikeout (deleted), when false - mark as red (inserted), when null - do nothing with rows style
      * @param maxColumn - last column to copy (to prevent copying service secured columns), when = 0 - copying all columns from row
      */
     private static void copySheetWithFilter(XSSFSheet sourceSheet, XSSFSheet targetSheet,
-                                        LinkedHashMap<String, Requirement> filterMap,
-                                        Boolean isDeleted, int maxColumn) {
+                                            LinkedHashMap<String, Requirement> filterMap,
+                                            int maxColumn) {
 
         TreeMap<Integer, Requirement> parents = new TreeMap<>(); // Rows for parent nodes (outline levels and requirements)
         TreeMap<Integer, Requirement> prevParents = new TreeMap<>(); // Parents for previous row
 
         // Common styles for suitable rows with all outline levels
         HashMap<Integer, ArrayList<XSSFCellStyle>> rowStyles = new HashMap<>();
-        // Styles for parent rows with all outline levels (will be corrected to GREY)
+        // Styles for parent rows with all outline levels
         HashMap<Integer, ArrayList<XSSFCellStyle>> parentStyles = new HashMap<>();
 
-        int newRowNum = 0; // Current row number in target sheet
+        int newRowNum = Requirement.HEADER_LAST_ROW + 1; // Current row number in target sheet
+        String oldName = null; // Previous name was copied
 
         int lastRow = sourceSheet.getLastRowNum();
 
-        for (int i = 0; i <= lastRow; i++) { // View all source sheet
-
-            if (i <= Requirement.HEADER_LAST_ROW) continue; // Skip header
+        for (int i = Requirement.HEADER_LAST_ROW + 1; i <= lastRow; i++) { // View all source sheet
 
             Requirement req = new Requirement(); // Current requirement
             XSSFRow row = sourceSheet.getRow(i);
@@ -506,24 +480,8 @@ public class XLSCompareMain {
                 int outlineLevel = row.getOutlineLevel();
 
                 if (!rowStyles.containsKey(outlineLevel)) { // Fill styles map for suitable rows
-                    ArrayList<XSSFCellStyle> styles = new ArrayList<>();
-                    for (int j = 0; j < row.getLastCellNum(); j++) {
-                        XSSFCell cell = row.getCell(j);
-                        XSSFCellStyle newCellStyle = targetSheet.getWorkbook().createCellStyle();
-                        newCellStyle.cloneStyleFrom(cell.getCellStyle());
-                        Font font = targetSheet.getWorkbook().createFont();
-                        if (isDeleted != null) {
-                            if (isDeleted) {
-                                font.setBold(true);
-                                font.setStrikeout(true);
-                            } else {
-                                font.setBold(true);
-                                font.setColor(IndexedColors.RED.getIndex());
-                            }
-                        }
-                        newCellStyle.setFont(font);
-                        styles.add(newCellStyle);
-                    }
+                    ArrayList<XSSFCellStyle> styles = XLSUtil.getRowStyles(sourceSheet, i, maxColumn);
+                    styles = XLSUtil.cloneRowStyles(targetSheet, styles);
                     rowStyles.put(outlineLevel, styles);
                 }
 
@@ -563,36 +521,35 @@ public class XLSCompareMain {
                     }
                 }
 
-                if (!isSamePath) {
-                    // Copy all parent rows and fill styles map for parent rows
+                if (!isSamePath) { // Outline level has been changed for current row
+                    // Fill styles map for parent rows
                     for (Map.Entry<Integer, Requirement> item : parents.entrySet()) {
                         Requirement parentReq = item.getValue();
                         parentRowNum = parentReq.getRow();
                         XSSFRow parentRow = sourceSheet.getRow(parentRowNum);
                         int parentOutlineLevel = parentRow.getOutlineLevel();
                         if (!parentStyles.containsKey(parentOutlineLevel)) {
-                            ArrayList<XSSFCellStyle> styles = new ArrayList<>();
-                            // Copy style from existing cell and correct: all styles after specified row are common - takes it from array
-                            for (int j = 0; j < parentRow.getLastCellNum(); j++) {
-                                XSSFCell cell = parentRow.getCell(j);
-                                XSSFCellStyle newCellStyle = targetSheet.getWorkbook().createCellStyle();
-                                newCellStyle.cloneStyleFrom(cell.getCellStyle());
-                                Font font = targetSheet.getWorkbook().createFont();
-                                font.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
-                                newCellStyle.setFont(font);
-                                styles.add(newCellStyle);
-                            }
+                            ArrayList<XSSFCellStyle> styles = XLSUtil.getRowStyles(sourceSheet, parentRowNum, maxColumn);
+                            XLSUtil.cloneRowStyles(targetSheet, styles);
+                            styles = XLSUtil.modifyCellStyles(targetSheet, parentRow, MarkRowType.PARENT);
                             parentStyles.put(parentOutlineLevel, styles);
                         }
-                        XLSUtil.copyRow(sourceSheet, targetSheet, true, parentRowNum, newRowNum,
-                                        maxColumn, null, false, parentStyles.get(parentOutlineLevel));
-                        newRowNum++;
+                        // Copy only parent rows that mismatch with previous parent rows
+                        if (prevParents.size() > 0 && prevParents.containsValue(item.getValue())) {
+                            // One of parent rows that already was copied
+                        }
+                        else if (oldName == null || !oldName.equals(item.getValue().getName())) {
+                            XLSUtil.copyRow(sourceSheet, targetSheet, true, parentRowNum, newRowNum,
+                                            maxColumn, null, false, parentStyles.get(parentOutlineLevel));
+                            newRowNum++;
+                        }
                     }
                 }
                 // Copy main row suitable for filter
                 XLSUtil.copyRow(sourceSheet, targetSheet, true, i, newRowNum,
                                  maxColumn, null, false, rowStyles.get(outlineLevel));
                 prevParents = (TreeMap<Integer, Requirement>) parents.clone();
+                oldName = req.getName();
                 // prevParents.put(outlineLevel, req);
                 newRowNum++;
             }
@@ -700,83 +657,6 @@ public class XLSCompareMain {
             }
         }
         return missedMap;
-    }
-
-    /**
-     * Outputs one Excel sheet with added or deleted rows with full path rows above
-     * @param sheet - Excel sheet
-     * @param array - array to fill sheet
-     */
-    private static void outOneDiffSheet(XSSFSheet sheet, LinkedHashMap<String, Requirement> array) {
-        XSSFCellStyle style = sheet.getWorkbook().createCellStyle();
-        XSSFFont font = sheet.getWorkbook().createFont();
-        font.setColor(IndexedColors.GREY_50_PERCENT.getIndex()); // Color for path rows
-        style.setFont(font);
-
-        int rowNum = 0;
-        int level = 0;
-        String oldPathStr = "";
-//        String[] oldPathArr = {};
-        for (Map.Entry<String, Requirement> item : array.entrySet()) {
-            String pathStr = getOnlyPath(item.getKey());
-            if (!pathStr.equals(oldPathStr)) {
-                String[] pathArr = pathStr.split("\\\\");
-                level = 0;
-                for (int i = 1; i < pathArr.length; i++) {
-/*
-                    if (i < oldPathArr.length) { // Do not output common parts of path
-                        if (oldPathArr[i].equals(pathArr[i])) continue;
-                    }
-*/
-                    XSSFRow pathRow = sheet.createRow(rowNum);
-                    XSSFCell pathCount = pathRow.createCell(0);
-                    pathCount.setCellType(CellType.NUMERIC);
-                    pathCount.setCellStyle(style);
-                    pathCount.setCellValue(i);
-                    XSSFCell pathHead = pathRow.createCell(1);
-                    pathHead.setCellStyle(style);
-                    pathHead.setCellValue(pathArr[i]);
-                    rowNum++;
-                    level = i;
-                }
-                oldPathStr = pathStr;
-//                oldPathArr = pathArr;
-            }
-            XSSFRow row = sheet.createRow(rowNum);
-            XSSFCell path = row.createCell(0);
-            path.setCellValue(level + 1);
-            XSSFCell name = row.createCell(1);
-            name.setCellValue(getOnlyName(item.getKey()));
-            rowNum++;
-        }
-    }
-
-    /**
-     * Returns name from full path (path with name), divided by "|"
-     * @param item - path with name
-     * @return - only name
-     */
-    private static String getOnlyName(String item) {
-        String name = "";
-        if (item != null) {
-            int pos = item.lastIndexOf('|');
-            if (pos >= 0 && pos < item.length() - 1) name = item.substring(pos + 1);
-        }
-        return name;
-    }
-
-    /**
-     * Returns path from full path (path with name), divided by "|"
-     * @param item - path with name
-     * @return - only path
-     */
-    private static String getOnlyPath(String item) {
-        String name = "";
-        if (item != null) {
-            int pos = item.lastIndexOf('|');
-            if (pos >= 0) name = item.substring(0, pos);
-        }
-        return name;
     }
 
     /**
