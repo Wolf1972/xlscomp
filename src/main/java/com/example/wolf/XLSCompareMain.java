@@ -272,11 +272,11 @@ public class XLSCompareMain {
             }
 
             if (matchedMap.size() > 0) { // Rows matched with MxWeb requirements
-                if (maxColumn > Requirement.MXWEB_RELEASE) {
+                if (maxColumn > Requirement.describer.get(RequirementColumnType.RQ_OTHER_REL)) {
                     XSSFSheet matchedSheet = book.createSheet("MX Matched");
                     XLSUtil.copySheet(newFileName, matchedSheet, maxColumn);
                     XLSUtil.groupSheet(matchedSheet, Requirement.HEADER_LAST_ROW + 1);
-                    markOneSheet(matchedSheet, matchedMap, null,MarkRowType.CHANGED);
+                    markOneSheet(matchedSheet, matchedMap, null, MarkRowType.CHANGED);
                     System.out.println("= MxWeb matched rows: " + matchedMap.size());
                     // Output matched results
                     int maxRow = matchedSheet.getLastRowNum();
@@ -284,11 +284,12 @@ public class XLSCompareMain {
                         XSSFRow row = matchedSheet.getRow(i);
                         for (Map.Entry<String, Requirement> item : matchedMap.entrySet()) {
                             if (item.getValue().getRow() == i) {
-                                String mxWebRelease = item.getValue().getSource_req();
-                                if (row.getLastCellNum() > Requirement.MXWEB_RELEASE) {
+                                String mxWebRelease = item.getValue().getOtherRel();
+                                if (row.getLastCellNum() > Requirement.describer.get(RequirementColumnType.RQ_OTHER_REL)) {
                                     row.getCell(16).setCellValue(mxWebRelease);
-                                } else {
-                                    XSSFCell cell = row.createCell(Requirement.MXWEB_RELEASE);
+                                }
+                                else {
+                                    XSSFCell cell = row.createCell(Requirement.describer.get(RequirementColumnType.RQ_OTHER_REL));
                                     cell.setCellValue(mxWebRelease);
                                 }
                             }
@@ -570,7 +571,7 @@ public class XLSCompareMain {
         System.out.println("Trying to match our requirements with MxWeb requirements...");
 
         for (Map.Entry<String, Requirement> item : checkMap.entrySet()) {
-            String mxwebReqId = item.getValue().getReference();
+            String mxwebReqId = item.getValue().getOther();
             if (mxwebReqId != null && mxwebReqId.length() > 0) {
                 boolean isFound = false;
                 if (mxwebReqId.contains("\n")) mxwebReqId = mxwebReqId.replace("\n", " ");
@@ -624,7 +625,7 @@ public class XLSCompareMain {
 
                 boolean isFound = false;
                 for (Map.Entry<String, Requirement> item : checkMap.entrySet()) {
-                    String mxwebReqId = item.getValue().getReference();
+                    String mxwebReqId = item.getValue().getOther();
                     if (mxwebReqId != null && !mxwebReqId.isEmpty()) {
                         if (mxwebReqId.contains("\n")) mxwebReqId = mxwebReqId.replace("\n", " ");
                         List<String> aMReq;
@@ -636,12 +637,12 @@ public class XLSCompareMain {
                         }
                         for (int k = 0; k < aMReq.size(); k++) {
                             if (aMReq.get(k).equals(searchFor)) {
-                                String oldRelease = item.getValue().getSource_req();
+                                String oldRelease = item.getValue().getOtherRel();
                                 if (oldRelease != null && !oldRelease.isEmpty() && !release.isEmpty() && !oldRelease.equals(release)) {
                                     System.out.println("ERROR. Row " + (item.getValue().getRow() + 1) + " requires release " + release + " but already has release " + oldRelease);
                                 }
                                 else {
-                                    item.getValue().setSource_req(release);
+                                    item.getValue().setOtherRel(release);
                                 }
                                 isFound = true;
                                 break;

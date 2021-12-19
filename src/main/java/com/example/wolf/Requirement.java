@@ -8,15 +8,13 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
+import java.util.*;
 
 public class Requirement extends BaseRequirement {
 
     static final int HEADER_LAST_ROW = 1; // Header row index (starts from 0)
 
-    static final int MXWEB_RELEASE = 17; // MxWeb release column (column R - index 17 from 0)
+    static RequirementColumnDescriber describer = new RequirementColumnDescriber(); // Map with column indexes
 
     String id; // Requirement id
     private Integer row; // Excel sheet row num (when requirement loads from Excel sheet)
@@ -26,7 +24,7 @@ public class Requirement extends BaseRequirement {
     private String name; // B(1): Requirement
     private String priority; // C(2): Requirement priority
     private String done; // D(3): Requirement has realised
-    private String reference; // E(4): Requirement from other source (MarxWeb)
+    private String other; // E(4): Requirement from other source (mxWeb)
     private String new_req; // F(5): New requirement flag
     private String integration; // G(6): Integration requirement
     private String service; // H(7): Integration service requirement
@@ -40,7 +38,7 @@ public class Requirement extends BaseRequirement {
     private String version; // O(14): Plan to realised in version
     private String release; // P(15): Plan to realized in release
     private String questions; // Q(16): Work questions for requirement
-    private String source_req; // R(17): Requirement in source
+    private String other_rel; // R(17): Requirement in source (mxWeb)
     private String tt; // S(18): Team track task
     private String trello; // T(19): Trello task
     private String primary; // U(20): Primary responsible
@@ -61,7 +59,7 @@ public class Requirement extends BaseRequirement {
         if (name != null ? !name.equals(that.name) : that.name != null) return false;
         if (priority != null ? !priority.equals(that.priority) : that.priority != null) return false;
         if (done != null ? !done.equals(that.done) : that.done != null) return false;
-        if (reference != null ? !reference.equals(that.reference) : that.reference != null) return false;
+        if (other != null ? !other.equals(that.other) : that.other != null) return false;
         if (new_req != null ? !new_req.equals(that.new_req) : that.new_req != null) return false;
         if (integration != null ? !integration.equals(that.integration) : that.integration != null) return false;
         if (service != null ? !service.equals(that.service) : that.service != null) return false;
@@ -75,7 +73,7 @@ public class Requirement extends BaseRequirement {
         if (version != null ? !version.equals(that.version) : that.version != null) return false;
         if (release != null ? !release.equals(that.release) : that.release != null) return false;
         if (questions != null ? !questions.equals(that.questions) : that.questions != null) return false;
-        if (source_req != null ? !source_req.equals(that.source_req) : that.source_req != null) return false;
+        if (other_rel != null ? !other_rel.equals(that.other_rel) : that.other_rel != null) return false;
         if (tt != null ? !tt.equals(that.tt) : that.tt != null) return false;
         if (trello != null ? !trello.equals(that.trello) : that.trello != null) return false;
         if (primary != null ? !primary.equals(that.primary) : that.primary != null) return false;
@@ -93,7 +91,7 @@ public class Requirement extends BaseRequirement {
         result = 31 * result + (name != null ? name.hashCode() : 0);
         result = 31 * result + (priority != null ? priority.hashCode() : 0);
         result = 31 * result + (done != null ? done.hashCode() : 0);
-        result = 31 * result + (reference != null ? reference.hashCode() : 0);
+        result = 31 * result + (other != null ? other.hashCode() : 0);
         result = 31 * result + (new_req != null ? new_req.hashCode() : 0);
         result = 31 * result + (integration != null ? integration.hashCode() : 0);
         result = 31 * result + (service != null ? service.hashCode() : 0);
@@ -107,7 +105,7 @@ public class Requirement extends BaseRequirement {
         result = 31 * result + (version != null ? version.hashCode() : 0);
         result = 31 * result + (release != null ? release.hashCode() : 0);
         result = 31 * result + (questions != null ? questions.hashCode() : 0);
-        result = 31 * result + (source_req != null ? source_req.hashCode() : 0);
+        result = 31 * result + (other_rel != null ? other_rel.hashCode() : 0);
         result = 31 * result + (tt != null ? tt.hashCode() : 0);
         result = 31 * result + (trello != null ? trello.hashCode() : 0);
         result = 31 * result + (primary != null ? primary.hashCode() : 0);
@@ -126,16 +124,16 @@ public class Requirement extends BaseRequirement {
         return name;
     }
 
-    public String getReference() {
-        return reference;
+    public String getOther() {
+        return other;
     }
 
-    public String getSource_req() {
-        return source_req;
+    public String getOtherRel() {
+        return other_rel;
     }
 
-    public void setSource_req(String source_req) {
-        this.source_req = source_req;
+    public void setOtherRel(String other_rel) {
+        this.other_rel = other_rel;
     }
 
     /**
@@ -146,35 +144,51 @@ public class Requirement extends BaseRequirement {
         int cells = xrow.getLastCellNum();
         row = xrow.getRowNum();
 
-        if (cells > 0) level = safeLoadInteger(xrow, 0); // Requirement level
-        if (cells > 1) name = safeLoadString(xrow, 1); // Requirement
-        if (name.contains("\\")) {
+        for (Map.Entry<RequirementColumnType, Integer> item : describer.map.entrySet()) {
+            RequirementColumnType rqType = item.getKey();
+            Integer column = item.getValue();
+            if (column != null && cells > column) {
+                switch (rqType) {
+                    case RQ_LEVEL:       { level = safeLoadInteger(xrow, column); break; }      // Requirement level
+                    case RQ_NAME:        { name = safeLoadString(xrow, column); break; }        // Requirement name
+                    case RQ_PRIORITY:    { priority = safeLoadString(xrow, column); break; }    // Requirement priority
+                    case RQ_DONE:        { done = safeLoadString(xrow, column); break; }        // Requirement has done
+                    case RQ_OTHER:       { other = safeLoadString(xrow, column); break; }       // Requirement from other source (mxWeb)
+                    case RQ_NEW_REQ:     { new_req = safeLoadString(xrow, column); break; }     // New requirement flag
+                    case RQ_INTEGRATION: { integration = safeLoadString(xrow, column); break; } // Integration requirement
+                    case RQ_SERVICE:     { service = safeLoadString(xrow, column); break; }     // Integration service requirement
+                    case RQ_COMMENT:     { comment = safeLoadString(xrow, column); break; }     // Comment for requirement
+                    case RQ_LINKED:      { linked = safeLoadString(xrow, column); break; }      // Linked requirement
+                    case RQ_CURR_STATUS: { curr_status = safeLoadString(xrow, column); break; } // Requirement current status
+                    case RQ_TYPE:        { type = safeLoadString(xrow, column); break; }        // Requirement type
+                    case RQ_SOURCE:      { source = safeLoadString(xrow, column); break; }      // Requirement source
+                    case RQ_FOUNDATION:  { foundation = safeLoadString(xrow, column); break; }  // Requirement foundation
+
+                    case RQ_VERSION:     { version = safeLoadString(xrow, column); break; }     // Plan to realised in version
+                    case RQ_RELEASE:     { release = safeLoadString(xrow, column); break; }     // Plan to realised in release
+                    case RQ_QUESTIONS:   { questions = safeLoadString(xrow, column); break; }   // Work questions for requirement
+                    case RQ_OTHER_REL:  { other_rel = safeLoadString(xrow, column); break; }   // Release in other source (mxWeb)
+                    case RQ_TT:          { tt = safeLoadString(xrow, column); break; }          // TeamTrack task
+                    case RQ_TRELLO:      { trello = safeLoadString(xrow, column); break; }      // Trello task
+                    case RQ_PRIMARY:     { primary = safeLoadString(xrow, column); break; }     // Primary responsible
+                    case RQ_SECONDARY:   { secondary = safeLoadString(xrow, column); break; }   // Secondary responsible
+                    case RQ_RISK:        { risk = safeLoadString(xrow, column); break; }        // Risk
+                    case RQ_RISK_DESC:   { risk_desc = safeLoadString(xrow, column); break; }   // Risk description
+                }
+            }
+        }
+        if (level == null) {
+            System.out.println("ERROR. Level for row " + (row + 1) + " is empty");
+            level = 0;
+        }
+        if (name == null) {
+            System.out.println("ERROR. Name for row " + (row + 1) + " is empty");
+            name = "";
+        }
+        else if (name.contains("\\")) {
             System.out.println("WARNING. Name for row " + (row + 1) + " contains \\");
             name = name.replace("\\", "");
         }
-        if (cells > 2) priority = safeLoadString(xrow, 2); // Requirement priority
-        if (cells > 3) done = safeLoadString(xrow,3); // Requirement has realised
-        if (cells > 4) reference = safeLoadString(xrow, 4); // Requirement from other source (MarxxWeb)
-        if (cells > 5) new_req = safeLoadString(xrow, 5); // New requirement flag
-        if (cells > 6) integration = safeLoadString(xrow, 6); // Integration requirement
-        if (cells > 7) service = safeLoadString(xrow, 7); // Integration service requirement
-        if (cells > 8) comment = safeLoadString(xrow, 8); // Comment for requirement
-        if (cells > 9) linked = safeLoadString(xrow,9); // Linked requirement
-        if (cells > 10) curr_status = safeLoadString(xrow,10); // Requirement status
-        if (cells > 11) type = safeLoadString(xrow,11); // Requirement type
-        if (cells > 12) source = safeLoadString(xrow,12); // Requirement source
-        if (cells > 13) foundation = safeLoadString(xrow,13); // Requirement foundation
-
-        if (cells > 14) version = safeLoadString(xrow,14); // Plan to realised in version
-        if (cells > 15) release = safeLoadString(xrow, 15); // Plan to realized in release
-        if (cells > 16) questions = safeLoadString(xrow,16); // Work questions for requirement
-        if (cells > 17) source_req = safeLoadString(xrow,17); // Requirement in source
-        if (cells > 18) tt = safeLoadString(xrow,18); // Team track task
-        if (cells > 19) trello = safeLoadString(xrow,19); // Trello task
-        if (cells > 20) primary = safeLoadString(xrow,20); // Primary responsible
-        if (cells > 21) secondary = safeLoadString(xrow,21); // Secondary responsible
-        if (cells > 22) risk = safeLoadString(xrow,22); // Risk
-        if (cells > 23) risk_desc = safeLoadString(xrow,23); // Risk description
 
         // Id evaluation - get all parent nodes
         int outlineLevel = xrow.getOutlineLevel();
@@ -214,32 +228,40 @@ public class Requirement extends BaseRequirement {
      * @param row - XLSX row
      */
     public void saveToRow(XSSFRow row) {
-        XSSFCell cell = row.createCell(0); cell.setCellValue(level); // Requirement level
-        cell = row.createCell(1); cell.setCellValue(name); // Requirement
-        cell = row.createCell(2); cell.setCellValue(priority); // Requirement priority
-        cell = row.createCell(3); cell.setCellValue(done); // Requirement has realised
-        cell = row.createCell(4); cell.setCellValue(reference); // Requirement from other source (MarxWeb)
-        cell = row.createCell(5); cell.setCellValue(new_req); // New requirement flag
-        cell = row.createCell(6); cell.setCellValue(integration); // Integration requirement
-        cell = row.createCell(7); cell.setCellValue(service); // Integration service requirement
-        cell = row.createCell(8); cell.setCellValue(comment); // Comment for requirement
-        cell = row.createCell(9); cell.setCellValue(linked); // Linked requirement
-        cell = row.createCell(10); cell.setCellValue(curr_status); // Requirement status
-        cell = row.createCell(11); cell.setCellValue(type); // Requirement type
-        cell = row.createCell(12); cell.setCellValue(source); // Requirement source
-        cell = row.createCell(13); cell.setCellValue(foundation); // Requirement foundation
+        for (Map.Entry<RequirementColumnType, Integer> item : describer.map.entrySet()) {
+            RequirementColumnType rqType = item.getKey();
+            Integer column = item.getValue();
+            if (column != null) {
+                XSSFCell cell = row.createCell(column);
+                switch (rqType) {
+                    case RQ_LEVEL:       { cell.setCellValue(level);  break; }      // Requirement level
+                    case RQ_NAME:        { cell.setCellValue(name); break; }        // Requirement name
+                    case RQ_PRIORITY:    { cell.setCellValue(priority); break; }    // Requirement priority
+                    case RQ_DONE:        { cell.setCellValue(done); break; }        // Requirement has done
+                    case RQ_OTHER:       { cell.setCellValue(other); break; }       // Requirement from other source (mxWeb)
+                    case RQ_NEW_REQ:     { cell.setCellValue(new_req); break; }     // New requirement flag
+                    case RQ_INTEGRATION: { cell.setCellValue(integration); break; } // Integration requirement
+                    case RQ_SERVICE:     { cell.setCellValue(service); break; }     // Integration service requirement
+                    case RQ_COMMENT:     { cell.setCellValue(comment); break; }     // Comment for requirement
+                    case RQ_LINKED:      { cell.setCellValue(linked); break; }      // Linked requirement
+                    case RQ_CURR_STATUS: { cell.setCellValue(curr_status); break; } // Requirement current status
+                    case RQ_TYPE:        { cell.setCellValue(type); break; }        // Requirement type
+                    case RQ_SOURCE:      { cell.setCellValue(source); break; }      // Requirement source
+                    case RQ_FOUNDATION:  { cell.setCellValue(foundation); break; }  // Requirement foundation
 
-        cell = row.createCell(14); cell.setCellValue(version); // Plan to realised in version
-        cell = row.createCell(15); cell.setCellValue(release); // Plan to realized in release
-        cell = row.createCell(16); cell.setCellValue(questions); // Work questions for requirement
-        cell = row.createCell(17); cell.setCellValue(source_req); // Source requirement
-        cell = row.createCell(18); cell.setCellValue(tt); // Team track task
-        cell = row.createCell(19); cell.setCellValue(trello); // Trello task
-        cell = row.createCell(20); cell.setCellValue(primary); // Primary responsibly
-        cell = row.createCell(21); cell.setCellValue(secondary); // Secondary responsibly
-        cell = row.createCell(22); cell.setCellValue(risk); // Risk
-        cell = row.createCell(23); cell.setCellValue(risk_desc); // Risk description
-
+                    case RQ_VERSION:     { cell.setCellValue(version); break; }     // Plan to realised in version
+                    case RQ_RELEASE:     { cell.setCellValue(release); break; }     // Plan to realised in release
+                    case RQ_QUESTIONS:   { cell.setCellValue(questions); break; }   // Work questions for requirement
+                    case RQ_OTHER_REL:   { cell.setCellValue(other_rel); break; }   // Release in other source (mxWeb)
+                    case RQ_TT:          { cell.setCellValue(tt); break; }          // TeamTrack task
+                    case RQ_TRELLO:      { cell.setCellValue(trello); break; }      // Trello task
+                    case RQ_PRIMARY:     { cell.setCellValue(primary); break; }     // Primary responsible
+                    case RQ_SECONDARY:   { cell.setCellValue(secondary); break; }   // Secondary responsible
+                    case RQ_RISK:        { cell.setCellValue(risk); break; }        // Risk
+                    case RQ_RISK_DESC:   { cell.setCellValue(risk_desc); break; }   // Risk description
+                }
+            }
+        }
     }
 
     /**
@@ -262,7 +284,7 @@ public class Requirement extends BaseRequirement {
         if (name != null ? !name.equals(that.name) : that.name != null) changes.add(1);
         if (priority != null ? !priority.equals(that.priority) : that.priority != null) changes.add(2);
         if (done != null ? !done.equals(that.done) : that.done != null) changes.add(3);
-        if (reference != null ? !reference.equals(that.reference) : that.reference != null) changes.add(4);
+        if (other != null ? !other.equals(that.other) : that.other != null) changes.add(4);
         if (new_req != null ? !new_req.equals(that.new_req) : that.new_req != null) changes.add(5);
         if (integration != null ? !integration.equals(that.integration) : that.integration != null) changes.add(6);
         if (service != null ? !service.equals(that.service) : that.service != null) changes.add(7);
@@ -276,7 +298,7 @@ public class Requirement extends BaseRequirement {
         if (version != null ? !version.equals(that.version) : that.version != null) changes.add(14);
         if (release != null ? !release.equals(that.release) : that.release != null) changes.add(15);
         if (questions != null ? !questions.equals(that.questions) : that.questions != null) changes.add(16);
-        if (source_req != null ? !source_req.equals(that.source_req) : that.source_req != null) changes.add(17);
+        if (other_rel != null ? !other_rel.equals(that.other_rel) : that.other_rel != null) changes.add(17);
         if (tt != null ? !tt.equals(that.tt) : that.tt != null) changes.add(18);
         if (trello != null ? !trello.equals(that.trello) : that.trello != null) changes.add(19);
         if (primary != null ? !primary.equals(that.primary) : that.primary != null) changes.add(20);
