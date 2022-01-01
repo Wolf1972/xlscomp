@@ -49,7 +49,7 @@ public class XLSUtil {
                 else {
                     styles = groupStyles.get(outlineLevel); // Use common style has already defined
                 }
-                copyRow(sourceSheet, targetSheet, true, i, i, maxColumn, null, false, styles);
+                copyRow(sourceSheet, targetSheet, true, i, i, maxColumn, null, false, styles, null, null);
             }
 
             sourceBook.close();
@@ -71,7 +71,7 @@ public class XLSUtil {
         for (int i = 0; i <= Requirement.HEADER_LAST_ROW; i++) {
             ArrayList<XSSFCellStyle> styles = getRowStyles(sourceSheet, i, maxColumn);
             styles = cloneRowStyles(targetSheet, styles);
-            copyRow(sourceSheet, targetSheet, true, i, i, maxColumn, null, false, styles);
+            copyRow(sourceSheet, targetSheet, true, i, i, maxColumn, null, false, styles, null, null);
         }
     }
 
@@ -259,13 +259,17 @@ public class XLSUtil {
      * @param onlyColumns - copy only rows specified in this array (when null - this filter is not applying)
      * @param isOnlyEmpty - when true: copy only empty cells in target sheet, when false - any cells
      * @param columnStyles - styles for all columns (may be null)
+     * @param sourceDescriber - source sheet column describer (if only structure difference between source and target)
+     * @param targetDescriber - target sheet column describer (if only structure difference between source and target)
      */
     static void copyRow(XSSFSheet sourceWorksheet, XSSFSheet targetWorksheet, boolean isAppend,
                         int sourceRowNum, int targetRowNum,
                         int maxColumn,
                         List<Integer> onlyColumns,
                         boolean isOnlyEmpty,
-                        ArrayList<XSSFCellStyle> columnStyles) {
+                        ArrayList<XSSFCellStyle> columnStyles,
+                        RequirementColumnDescriber sourceDescriber,
+                        RequirementColumnDescriber targetDescriber) {
         // Get the source / new row
         XSSFRow newRow = targetWorksheet.getRow(targetRowNum);
         XSSFRow sourceRow = sourceWorksheet.getRow(sourceRowNum);
@@ -284,9 +288,21 @@ public class XLSUtil {
         // Loop through source columns to add to new row
         for (int i = 0; i < sourceRow.getLastCellNum(); i++) {
 
+            // Columns mapping
+            int k = i;
+            if (sourceDescriber != null && targetDescriber != null) {
+                RequirementFieldType columnType = sourceDescriber.getField(i);
+                Integer columnNumber = targetDescriber.getColumn(columnType);
+                if (columnNumber != null)
+                    k = columnNumber;
+                else
+                    continue;
+            }
+
             // Grab a copy of the old/new cell
             XSSFCell oldCell = sourceRow.getCell(i);
-            XSSFCell newCell = newRow.getCell(i);
+            XSSFCell newCell = newRow.getCell(k);
+
             if (newCell == null) newCell = newRow.createCell(i);
 
             // Do not copy service columns
@@ -319,38 +335,38 @@ public class XLSUtil {
             }
 
             boolean isNeedCopy = true;
-            if (isOnlyEmpty) {
+            if (isOnlyEmpty) { // When we are copying only empty target cells
                 isNeedCopy = false;
                 CellType newType = newCell.getCellType();
                 if (newType == CellType.BLANK) isNeedCopy = true;
-                if (!isNeedCopy && (newType == CellType.STRING) && !oldCell.getRichStringCellValue().getString().isEmpty()) isNeedCopy = true;
-                if (!isNeedCopy && (newType == CellType.NUMERIC) && oldCell.getNumericCellValue() != 0) isNeedCopy = true;
+                if (!isNeedCopy && (newType == CellType.STRING) && !newCell.getRichStringCellValue().getString().isEmpty()) isNeedCopy = true;
+                if (!isNeedCopy && (newType == CellType.NUMERIC) && newCell.getNumericCellValue() != 0) isNeedCopy = true;
             }
             if (!isNeedCopy) continue;
 
             // Set the cell data value
-            CellType type = oldCell.getCellType();
-            if (type == CellType.BLANK) {
-                newCell.setCellType(type);
+            CellType oldType = oldCell.getCellType();
+            if (oldType == CellType.BLANK) {
+                newCell.setCellType(oldType);
                 newCell.setCellValue(oldCell.getStringCellValue());
             }
-            else if (type == CellType.BOOLEAN) {
-                newCell.setCellType(type);
+            else if (oldType == CellType.BOOLEAN) {
+                newCell.setCellType(oldType);
                 newCell.setCellValue(oldCell.getBooleanCellValue());
             }
-            else if (type == CellType.ERROR) {
-                newCell.setCellType(type);
+            else if (oldType == CellType.ERROR) {
+                newCell.setCellType(oldType);
                 newCell.setCellErrorValue(oldCell.getErrorCellValue());
             }
-            else if (type == CellType.FORMULA) {
+            else if (oldType == CellType.FORMULA) {
                 newCell.setCellFormula(oldCell.getCellFormula());
             }
-            else if (type == CellType.NUMERIC) {
-                newCell.setCellType(type);
+            else if (oldType == CellType.NUMERIC) {
+                newCell.setCellType(oldType);
                 newCell.setCellValue(oldCell.getNumericCellValue());
             }
-            else if (type == CellType.STRING) {
-                newCell.setCellType(type);
+            else if (oldType == CellType.STRING) {
+                newCell.setCellType(oldType);
                 newCell.setCellValue(oldCell.getRichStringCellValue());
             }
         }

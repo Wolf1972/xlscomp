@@ -2,7 +2,7 @@ package com.example.wolf;
 
 import java.util.HashMap;
 
-public enum RequirementColumnType {
+public enum RequirementFieldType {
     RQ_LEVEL,        // A(0): Requirement level
     RQ_NAME,         // B(1): Requirement
     RQ_PRIORITY,     // C(2): Requirement priority
@@ -27,5 +27,12 @@ public enum RequirementColumnType {
     RQ_PRIMARY,      // U(20): Primary responsible
     RQ_SECONDARY,    // V(21): Secondary responsible
     RQ_RISK,         // W(22): Risk
-    RQ_RISK_DESC     // X(23): Risk description
+    RQ_RISK_DESC,    // X(23): Risk description
+    // Development & testing columns
+    RQ_CONSOLE,      // Y(24): Console
+    RQ_CLIENT,       // Z(25): Client part
+    RQ_MOBILE,       // AA(26): Mobile application
+    RQ_NOTE_NEW,     // AB(27): Note for new application
+    RQ_EXIST_OLD,    // AC(28): Has is old application
+    RQ_NOTE_OLD      // AD(29): Note for old application
 }

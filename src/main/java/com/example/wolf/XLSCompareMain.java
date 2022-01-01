@@ -1,7 +1,6 @@
 package com.example.wolf;
 
 import org.apache.commons.cli.*;
-import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.*;
 
 import java.io.FileOutputStream;
@@ -10,6 +9,9 @@ import java.io.IOException;
 import java.util.*;
 
 public class XLSCompareMain {
+
+    public static RequirementColumnDescriber oldDescriber = new AlternateRequirementColumnDescriber();
+    public static RequirementColumnDescriber newDescriber = new DefaultRequirementColumnDescriber();
 
     public static void main (String[] args) {
 
@@ -30,7 +32,7 @@ public class XLSCompareMain {
         String resultFile = "data\\result.xlsx";
         String mxWebFile = "data\\mxweb.xlsx";
         String cmdColumns = "25";
-        String mergeMode = "e";
+        String mergeMode = "e"; // e
 
         Options options = new Options();
         options.addOption("o", "old", true, "Old XLSX file for compare");
@@ -101,12 +103,12 @@ public class XLSCompareMain {
 
             fileName = oldName;
             System.out.println("Loading old file " + fileName);
-            LinkedHashMap<String, Requirement> oldMap = Requirement.readFromExcel(fileName);
+            LinkedHashMap<String, Requirement> oldMap = Requirement.readFromExcel(fileName, oldDescriber);
             System.out.println("Rows loaded: " + oldMap.size());
 
             fileName = newName;
             System.out.println("Loading new file " + fileName);
-            LinkedHashMap<String, Requirement> newMap = Requirement.readFromExcel(fileName);
+            LinkedHashMap<String, Requirement> newMap = Requirement.readFromExcel(fileName, newDescriber);
 
             System.out.println("Rows loaded: " + newMap.size());
 
@@ -131,14 +133,16 @@ public class XLSCompareMain {
             LinkedHashMap<String, Requirement> addedMap = new LinkedHashMap<>();
 
             LinkedHashMap<String, Requirement> changedMap = new LinkedHashMap<>(); // Map with only changed rows
-            LinkedHashMap<String, List<Integer>> changedMapDetails = new LinkedHashMap<>(); // Map with columns has changed for every row has changed
+            LinkedHashMap<String, List<RequirementFieldType>> changedMapDetails = new LinkedHashMap<>(); // Map with columns has changed for every row has changed
 
+            // Merge sheets
             if (mergeMode != null && !mergeMode.isEmpty()) {
                 // Copy old sheet to both sheets: Current and New (they are same)
                 mergeSheet(oldSheet, currentSheet, oldMap, newMap, !mergeMode.contains("a"), maxColumn, false);
                 mergeSheet(oldSheet, newSheet, oldMap, newMap, !mergeMode.contains("a"), maxColumn, true);
             }
 
+            // Compare for changes
             for (Map.Entry<String, Requirement> item : oldMap.entrySet()) {
                 String key = item.getKey();
                 Requirement req = item.getValue();
@@ -148,7 +152,7 @@ public class XLSCompareMain {
                 else {
                     Requirement newReq = newMap.get(key);
                     if (newReq != null) {
-                        List<Integer> changedColumns = newReq.compare(req);
+                        List<RequirementFieldType> changedColumns = newReq.compare(req);
                         if (changedColumns != null && changedColumns.size() > 0) {
                             changedMap.put(key, req);
                             changedMapDetails.put(key, changedColumns);
@@ -213,13 +217,13 @@ public class XLSCompareMain {
      * @param addedMap - map with added rows
      * @param deletedMap - map with deleted rows
      * @param changedMap - map with changed rows
-     * @param changedDetailsMap - map with changed details
+     * @param changedDetailsMap - map with changed column details (set of RequirementFieldType for each row)
      * @param matchedMap - map with matched with MaxWeb requirement rows
      * @param missedMap - map with MxWeb requirements rows were missed when matching
      */
     private static void outResult(XSSFWorkbook book, String oldFileName, String newFileName, int maxColumn,
                                   LinkedHashMap<String, Requirement> addedMap, LinkedHashMap<String, Requirement> deletedMap,
-                                  LinkedHashMap<String, Requirement> changedMap, LinkedHashMap<String, List<Integer>> changedDetailsMap,
+                                  LinkedHashMap<String, Requirement> changedMap, LinkedHashMap<String, List<RequirementFieldType>> changedDetailsMap,
                                   LinkedHashMap<String, Requirement> matchedMap, LinkedHashMap<Integer, MxRequirement> missedMap) {
 
         System.out.println("Output results.");
@@ -229,17 +233,17 @@ public class XLSCompareMain {
             XSSFSheet currentSheet = book.getSheet("Current");
 
             XSSFSheet oldSheet = book.getSheet("Old");
-            if (deletedMap.size() > 0) markOneSheet(oldSheet, deletedMap, null, MarkRowType.DELETED);
-            if (changedMap.size() > 0) markOneSheet(oldSheet, changedMap, changedDetailsMap, MarkRowType.CHANGED);
+            if (deletedMap.size() > 0) markOneSheet(oldSheet, deletedMap, null, MarkRowType.DELETED, oldDescriber);
+            if (changedMap.size() > 0) markOneSheet(oldSheet, changedMap, changedDetailsMap, MarkRowType.CHANGED, oldDescriber);
 
             XSSFSheet newSheet = book.getSheet("New");
-            if (addedMap.size() > 0) markOneSheet(newSheet, addedMap, null, MarkRowType.ADDED);
-            if (changedMap.size() > 0) markOneSheet(newSheet, changedMap, changedDetailsMap, MarkRowType.CHANGED);
+            if (addedMap.size() > 0) markOneSheet(newSheet, addedMap, null, MarkRowType.ADDED, newDescriber);
+            if (changedMap.size() > 0) markOneSheet(newSheet, changedMap, changedDetailsMap, MarkRowType.CHANGED, newDescriber);
 
             if (deletedMap.size() > 0) {
                 XSSFSheet delSheet = book.createSheet("Deleted");
                 XLSUtil.copyHeader(oldSheet, delSheet, maxColumn);
-                copySheetWithFilter(oldSheet, delSheet, deletedMap, maxColumn);
+                copySheetWithFilter(oldSheet, delSheet, deletedMap, maxColumn, oldDescriber);
                 XLSUtil.groupSheet(delSheet, Requirement.HEADER_LAST_ROW + 1);
                 System.out.println("- Deleted rows: " + deletedMap.size());
             }
@@ -250,7 +254,7 @@ public class XLSCompareMain {
             if (addedMap.size() > 0) {
                 XSSFSheet addSheet = book.createSheet("Added");
                 XLSUtil.copyHeader(oldSheet, addSheet, maxColumn);
-                copySheetWithFilter(newSheet, addSheet, addedMap, maxColumn);
+                copySheetWithFilter(newSheet, addSheet, addedMap, maxColumn, newDescriber);
                 XLSUtil.groupSheet(addSheet, Requirement.HEADER_LAST_ROW + 1);
                 System.out.println("+ Added rows: " + addedMap.size());
             }
@@ -261,10 +265,10 @@ public class XLSCompareMain {
             if (changedMap.size() > 0) {
                 XSSFSheet changedSheet = book.createSheet("Changed");
                 XLSUtil.copyHeader(newSheet, changedSheet, maxColumn);
-                copySheetWithFilter(newSheet, changedSheet, changedMap, maxColumn);
+                copySheetWithFilter(newSheet, changedSheet, changedMap, maxColumn, newDescriber);
                 XLSUtil.groupSheet(changedSheet, Requirement.HEADER_LAST_ROW + 1);
-                markOneSheet(newSheet, changedMap, changedDetailsMap, MarkRowType.CHANGED);
-                markOneSheet(changedSheet, changedMap, changedDetailsMap, MarkRowType.CHANGED);
+                markOneSheet(newSheet, changedMap, changedDetailsMap, MarkRowType.CHANGED, newDescriber);
+                markOneSheet(changedSheet, changedMap, changedDetailsMap, MarkRowType.CHANGED, newDescriber);
                 System.out.println("* Changed rows: " + changedMap.size());
             }
             else {
@@ -272,11 +276,11 @@ public class XLSCompareMain {
             }
 
             if (matchedMap.size() > 0) { // Rows matched with MxWeb requirements
-                if (maxColumn > Requirement.describer.get(RequirementColumnType.RQ_OTHER_REL)) {
+                if (maxColumn > newDescriber.getColumn(RequirementFieldType.RQ_OTHER_REL)) {
                     XSSFSheet matchedSheet = book.createSheet("MX Matched");
                     XLSUtil.copySheet(newFileName, matchedSheet, maxColumn);
                     XLSUtil.groupSheet(matchedSheet, Requirement.HEADER_LAST_ROW + 1);
-                    markOneSheet(matchedSheet, matchedMap, null, MarkRowType.CHANGED);
+                    markOneSheet(matchedSheet, matchedMap, null, MarkRowType.CHANGED, newDescriber);
                     System.out.println("= MxWeb matched rows: " + matchedMap.size());
                     // Output matched results
                     int maxRow = matchedSheet.getLastRowNum();
@@ -285,11 +289,11 @@ public class XLSCompareMain {
                         for (Map.Entry<String, Requirement> item : matchedMap.entrySet()) {
                             if (item.getValue().getRow() == i) {
                                 String mxWebRelease = item.getValue().getOtherRel();
-                                if (row.getLastCellNum() > Requirement.describer.get(RequirementColumnType.RQ_OTHER_REL)) {
+                                if (row.getLastCellNum() > newDescriber.getColumn(RequirementFieldType.RQ_OTHER_REL)) {
                                     row.getCell(16).setCellValue(mxWebRelease);
                                 }
                                 else {
-                                    XSSFCell cell = row.createCell(Requirement.describer.get(RequirementColumnType.RQ_OTHER_REL));
+                                    XSSFCell cell = row.createCell(newDescriber.getColumn(RequirementFieldType.RQ_OTHER_REL));
                                     cell.setCellValue(mxWebRelease);
                                 }
                             }
@@ -314,38 +318,15 @@ public class XLSCompareMain {
     }
 
     /**
-     * Deletes all rows from sheet according requirements in specified map
-     * @param sheet - sheet to delete rows
-     * @param array - array with specified rows to delete
-     */
-    private static void deleteRows(XSSFSheet sheet, LinkedHashMap<String, Requirement> array) {
-
-        int lastRow = sheet.getLastRowNum();
-        Requirement req = new Requirement();
-
-        for (int i = lastRow; i >= 0; i--) {
-
-            if (i <= Requirement.HEADER_LAST_ROW) continue; // Skip header
-
-            XSSFRow row = sheet.getRow(i);
-            req.loadFromRow(row);
-
-            if (array.containsKey(req.id)) {
-                sheet.removeRow(row);
-            }
-        }
-    }
-
-    /**
      * Function copies cells from old sheet to new sheet with specified mode: all different cells or only empty cells
      * @param newSheet - sheet with old requirements
      * @param oldSheet - sheet with new requirements
      * @param oldMap - old requirement
      * @param newMap - new requirement
-     * @param isEmptyOnly - copy mode (when true: only empty cells in new sheet, false: all cells than have difference with old cells)
+     * @param isEmptyOnly - copy mode (when true: only empty cells in new sheet, when false: all cells than have difference with old cells)
      * @param maxColumn - max number of columns
      * @param isNewRefresh - when true: refresh newMap with requirements that have been copied
-     * @return - map with requirements were copied
+     * @return - map with requirements were merged
      */
     private static LinkedHashMap<String, Requirement> mergeSheet(XSSFSheet oldSheet, XSSFSheet newSheet,
                                                                  LinkedHashMap <String, Requirement> oldMap,
@@ -354,9 +335,9 @@ public class XLSCompareMain {
                                                                  int maxColumn,
                                                                  boolean isNewRefresh) {
 
-        System.out.println("Copying requirements attributes from " + oldSheet.getSheetName() + " to " + newSheet.getSheetName() + " " + (isEmptyOnly ? "(only empty cells)":"(all different cells)" + "..."));
+        System.out.println("Merging requirements attributes from " + oldSheet.getSheetName() + " to " + newSheet.getSheetName() + " " + (isEmptyOnly ? "(only empty cells)":"(all different cells)" + "..."));
 
-        LinkedHashMap<String, Requirement> copiedMap = new LinkedHashMap<>();
+        LinkedHashMap<String, Requirement> mergedMap = new LinkedHashMap<>();
 
         for (Map.Entry<String, Requirement> item : oldMap.entrySet()) {
             String key = item.getKey();
@@ -364,31 +345,40 @@ public class XLSCompareMain {
             if (newMap.containsKey(key)) {
                 Requirement newReq = newMap.get(key);
                 if (newReq != null) {
-                    List<Integer> changedColumns = newReq.compare(req);
-                    if (changedColumns != null && changedColumns.size() > 0) {
-                        copiedMap.put(key, req);
+                    List<RequirementFieldType> changedFields = newReq.compare(req);
+                    if (changedFields != null && changedFields.size() > 0) {
+                        mergedMap.put(key, req);
+                        // Transform set of fields into set of column numbers
+                        ArrayList<Integer> onlyColumns = new ArrayList<>();
+                        for (RequirementFieldType type : changedFields) {
+                            onlyColumns.add(newDescriber.getColumn(type));
+                        }
 //                        System.out.print("Copy row " + req.getRow() + " to row " + newReq.getRow() + ", columns " + changedColumns + "... ");
-                        XLSUtil.copyRow(oldSheet, newSheet, false, req.getRow(), newReq.getRow(), maxColumn, changedColumns, isEmptyOnly, null);
+                        XLSUtil.copyRow(oldSheet, newSheet, false, req.getRow(), newReq.getRow(), maxColumn, onlyColumns, isEmptyOnly, null,
+                                oldDescriber, newDescriber);
                         XSSFRow newRow = newSheet.getRow(newReq.getRow());
-                        if (isNewRefresh) newReq.loadFromRow(newRow); // Refresh new requirement with copying results
+                        if (isNewRefresh) newReq.loadFromRow(newRow, newDescriber); // Refresh new requirement with copying results
 //                        System.out.println("Done.");
                     }
                 }
             }
         }
-        System.out.println("Copying done. " + copiedMap.size() + " row(s) copied.");
-        return copiedMap;
+        System.out.println("Merging done. " + mergedMap.size() + " row(s) merged.");
+        return mergedMap;
     }
 
     /**
      * Mark rows in specified sheet according requirements in specified map. Mark style depends on specified type
      * @param sheet - sheet to mark
      * @param array - array with specified rows (deleted, added or changed)
-     * @param columnDetails - array with column indexes have to be marked (required for changed rows only)
+     * @param changedDetailsMap - map with changed column details (set of RequirementFieldType for each row)
      * @param mark - mark type (deleted, inserted or changed)
+     * @param describer - columns describer for sheet
      */
     private static void markOneSheet(XSSFSheet sheet, LinkedHashMap<String, Requirement> array,
-                                     LinkedHashMap<String, List<Integer>> columnDetails, MarkRowType mark) {
+                                     LinkedHashMap<String, List<RequirementFieldType>> changedDetailsMap,
+                                     MarkRowType mark,
+                                     RequirementColumnDescriber describer) {
 
         int lastRow = sheet.getLastRowNum();
         Requirement req = new Requirement();
@@ -399,19 +389,19 @@ public class XLSCompareMain {
         for (int i = Requirement.HEADER_LAST_ROW + 1; i <= lastRow; i++) {
 
             XSSFRow row = sheet.getRow(i);
-            req.loadFromRow(row);
+            req.loadFromRow(row, describer);
 
             ArrayList<XSSFCellStyle> styles = new ArrayList<>(); // Styles for current row
 
-            List<Integer> markedColumns = null; // List of marked columns (to mark changes only specified cells)
+            List<RequirementFieldType> changedFields = null; // List of changed requirements fields (to mark changes only specified cells)
 
             int outlineLevel = row.getOutlineLevel();
 
             if (array.containsKey(req.id)) {
 
-                if (columnDetails != null) { // When change mode we have to check according between changed rows and changed details (columns) for each row
-                    markedColumns = columnDetails.get(req.id);
-                    if (markedColumns == null) {
+                if (changedDetailsMap != null) { // When change mode we have to check according between changed rows and changed details (columns) for each row
+                    changedFields = changedDetailsMap.get(req.id);
+                    if (changedFields == null) {
                         System.out.println("ERROR: arrays mismatch - can't obtain changes details for row " + i);
                         continue;
                     }
@@ -425,18 +415,20 @@ public class XLSCompareMain {
                 if (groupStyles.containsKey(outlineLevel)) {
                     styles = groupStyles.get(outlineLevel);
                     if (styles != null) {
-                        if (markedColumns == null) { // Mark all cells in one row
+                        if (changedFields == null) { // Mark all cells in one row
                             for (int j = 0; j < row.getLastCellNum(); j++) {
                                 XSSFCell cell = row.getCell(j);
                                 if (j < styles.size()) cell.setCellStyle(styles.get(j));
                             }
                         }
                         else { // Mark specified cells only
-                            for (int j = 0; j < markedColumns.size(); j++) {
-                                int k = markedColumns.get(j);
-                                XSSFCell cell = row.getCell(k);
-                                if (cell != null) {
-                                    if (k < styles.size()) cell.setCellStyle(styles.get(k));
+                            for (int j = 0; j < changedFields.size(); j++) {
+                                Integer k = describer.getColumn(changedFields.get(j));
+                                if (k != null) {
+                                    XSSFCell cell = row.getCell(k);
+                                    if (cell != null) {
+                                        if (k < styles.size()) cell.setCellStyle(styles.get(k));
+                                    }
                                 }
                             }
                         }
@@ -449,13 +441,15 @@ public class XLSCompareMain {
     /**
      * Copies rows that contain in specified filter map and copies all its parent rows to specified sheet
      * @param sourceSheet - source sheet
-     * @param targetSheet - source sheet
+     * @param targetSheet - target sheet
      * @param filterMap - array with specified rows
      * @param maxColumn - last column to copy (to prevent copying service secured columns), when = 0 - copying all columns from row
+     * @param sourceDescriber - columns describer for source sheet
      */
     private static void copySheetWithFilter(XSSFSheet sourceSheet, XSSFSheet targetSheet,
                                             LinkedHashMap<String, Requirement> filterMap,
-                                            int maxColumn) {
+                                            int maxColumn,
+                                            RequirementColumnDescriber sourceDescriber) {
 
         TreeMap<Integer, Requirement> parents = new TreeMap<>(); // Rows for parent nodes (outline levels and requirements)
         TreeMap<Integer, Requirement> prevParents = new TreeMap<>(); // Parents for previous row
@@ -474,7 +468,7 @@ public class XLSCompareMain {
 
             Requirement req = new Requirement(); // Current requirement
             XSSFRow row = sourceSheet.getRow(i);
-            req.loadFromRow(row);
+            req.loadFromRow(row, sourceDescriber);
 
             if (filterMap.containsKey(req.id)) { // Suitable row?
 
@@ -500,7 +494,7 @@ public class XLSCompareMain {
                         int prevOutlineLevel = prevRow.getOutlineLevel();
                         if (prevOutlineLevel == j) {
                             Requirement parentReq = new Requirement(); // One of parent requirement (for iterations by parents)
-                            parentReq.loadFromRow(prevRow);
+                            parentReq.loadFromRow(prevRow, sourceDescriber);
                             parents.put(prevOutlineLevel, parentReq);
                             break;
                         } else if (prevOutlineLevel < j) {
@@ -541,14 +535,14 @@ public class XLSCompareMain {
                         }
                         else if (oldName == null || !oldName.equals(item.getValue().getName())) {
                             XLSUtil.copyRow(sourceSheet, targetSheet, true, parentRowNum, newRowNum,
-                                            maxColumn, null, false, parentStyles.get(parentOutlineLevel));
+                                            maxColumn, null, false, parentStyles.get(parentOutlineLevel), null, null);
                             newRowNum++;
                         }
                     }
                 }
                 // Copy main row suitable for filter
                 XLSUtil.copyRow(sourceSheet, targetSheet, true, i, newRowNum,
-                                 maxColumn, null, false, rowStyles.get(outlineLevel));
+                                 maxColumn, null, false, rowStyles.get(outlineLevel), null, null);
                 prevParents = (TreeMap<Integer, Requirement>) parents.clone();
                 oldName = req.getName();
                 // prevParents.put(outlineLevel, req);

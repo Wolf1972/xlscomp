@@ -1,6 +1,5 @@
 package com.example.wolf;
 
-import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
@@ -14,37 +13,42 @@ public class Requirement extends BaseRequirement {
 
     static final int HEADER_LAST_ROW = 1; // Header row index (starts from 0)
 
-    static RequirementColumnDescriber describer = new RequirementColumnDescriber(); // Map with column indexes
-
     String id; // Requirement id
     private Integer row; // Excel sheet row num (when requirement loads from Excel sheet)
     private Integer[] parentRows; // List of all parents Excel rows
     // Public columns
-    private Integer level; // A(0): Requirement level
-    private String name; // B(1): Requirement
-    private String priority; // C(2): Requirement priority
-    private String done; // D(3): Requirement has realised
-    private String other; // E(4): Requirement from other source (mxWeb)
-    private String new_req; // F(5): New requirement flag
+    private Integer level;      // A(0): Requirement level
+    private String name;        // B(1): Requirement
+    private String priority;    // C(2): Requirement priority
+    private String done;        // D(3): Requirement has realised
+    private String other;       // E(4): Requirement from other source (mxWeb)
+    private String new_req;     // F(5): New requirement flag
     private String integration; // G(6): Integration requirement
-    private String service; // H(7): Integration service requirement
-    private String comment; // I(8): Comment for requirement
-    private String linked; // J(9): Linked requirement
+    private String service;     // H(7): Integration service requirement
+    private String comment;     // I(8): Comment for requirement
+    private String linked;      // J(9): Linked requirement
     private String curr_status; // K(10): Current status
-    private String type; // L(11): Requirement type
-    private String source; // M(12): Requirement source
-    private String foundation; // N(13): Requirement foundation
+    private String type;        // L(11): Requirement type
+    private String source;      // M(12): Requirement source
+    private String foundation;  // N(13): Requirement foundation
     // Private columns
-    private String version; // O(14): Plan to realised in version
-    private String release; // P(15): Plan to realized in release
-    private String questions; // Q(16): Work questions for requirement
-    private String other_rel; // R(17): Requirement in source (mxWeb)
-    private String tt; // S(18): Team track task
-    private String trello; // T(19): Trello task
-    private String primary; // U(20): Primary responsible
-    private String secondary; // V(21): Secondary responsible
-    private String risk; // W(22): Risk
-    private String risk_desc; // X(23): Risk description
+    private String version;     // O(14): Plan to realised in version
+    private String release;     // P(15): Plan to realized in release
+    private String questions;   // Q(16): Work questions for requirement
+    private String other_rel;   // R(17): Requirement in source (mxWeb)
+    private String tt;          // S(18): Team track task
+    private String trello;      // T(19): Trello task
+    private String primary;     // U(20): Primary responsible
+    private String secondary;   // V(21): Secondary responsible
+    private String risk;        // W(22): Risk
+    private String risk_desc;   // X(23): Risk description
+    // Development & testing columns
+    private String console;     // Y(24): Console
+    private String client;      // Z(25): Client part
+    private String mobile;      // AA(26): Mobile application
+    private String note_new;    // AB(27): Note for new application
+    private String exist_old;   // AC(28): Has is old application
+    private String note_old;    // AD(29): Note for old application
 
     @Override
     public boolean equals(Object o) {
@@ -79,7 +83,15 @@ public class Requirement extends BaseRequirement {
         if (primary != null ? !primary.equals(that.primary) : that.primary != null) return false;
         if (secondary != null ? !secondary.equals(that.secondary) : that.secondary != null) return false;
         if (risk != null ? !risk.equals(that.risk) : that.risk != null) return false;
-        return risk_desc != null ? risk_desc.equals(that.risk_desc) : that.risk_desc == null;
+        if (risk_desc != null ? !risk_desc.equals(that.risk_desc) : that.risk_desc != null) return false;
+
+        if (console != null ? !console.equals(that.console) : that.console != null) return false;
+        if (client != null ? !client.equals(that.client) : that.client != null) return false;
+        if (mobile != null ? !mobile.equals(that.mobile) : that.mobile != null) return false;
+        if (note_new != null ? !note_new.equals(that.note_new) : that.note_new != null) return false;
+        if (exist_old != null ? !exist_old.equals(that.exist_old) : that.exist_old != null) return false;
+
+        return note_old != null ? note_old.equals(that.note_old) : that.note_old == null;
 
     }
 
@@ -113,6 +125,13 @@ public class Requirement extends BaseRequirement {
         result = 31 * result + (risk != null ? risk.hashCode() : 0);
         result = 31 * result + (risk_desc != null ? risk_desc.hashCode() : 0);
 
+        result = 31 * result + (console != null ? console.hashCode() : 0);
+        result = 31 * result + (client != null ? client.hashCode() : 0);
+        result = 31 * result + (mobile != null ? mobile.hashCode() : 0);
+        result = 31 * result + (note_new != null ? note_new.hashCode() : 0);
+        result = 31 * result + (exist_old != null ? exist_old.hashCode() : 0);
+        result = 31 * result + (note_old != null ? note_old.hashCode() : 0);
+
         return result;
     }
 
@@ -139,13 +158,14 @@ public class Requirement extends BaseRequirement {
     /**
      * Fills object fields from XLSX row
      * @param xrow - Excel XLSX row
+     * @param describer - column describer (it maps requirement fields to Excel columns)
      */
-    void loadFromRow(XSSFRow xrow) {
+    void loadFromRow(XSSFRow xrow, RequirementColumnDescriber describer) {
         int cells = xrow.getLastCellNum();
         row = xrow.getRowNum();
 
-        for (Map.Entry<RequirementColumnType, Integer> item : describer.map.entrySet()) {
-            RequirementColumnType rqType = item.getKey();
+        for (Map.Entry<RequirementFieldType, Integer> item : describer.map.entrySet()) {
+            RequirementFieldType rqType = item.getKey();
             Integer column = item.getValue();
             if (column != null && cells > column) {
                 switch (rqType) {
@@ -167,13 +187,20 @@ public class Requirement extends BaseRequirement {
                     case RQ_VERSION:     { version = safeLoadString(xrow, column); break; }     // Plan to realised in version
                     case RQ_RELEASE:     { release = safeLoadString(xrow, column); break; }     // Plan to realised in release
                     case RQ_QUESTIONS:   { questions = safeLoadString(xrow, column); break; }   // Work questions for requirement
-                    case RQ_OTHER_REL:  { other_rel = safeLoadString(xrow, column); break; }   // Release in other source (mxWeb)
+                    case RQ_OTHER_REL:   { other_rel = safeLoadString(xrow, column); break; }   // Release in other source (mxWeb)
                     case RQ_TT:          { tt = safeLoadString(xrow, column); break; }          // TeamTrack task
                     case RQ_TRELLO:      { trello = safeLoadString(xrow, column); break; }      // Trello task
                     case RQ_PRIMARY:     { primary = safeLoadString(xrow, column); break; }     // Primary responsible
                     case RQ_SECONDARY:   { secondary = safeLoadString(xrow, column); break; }   // Secondary responsible
                     case RQ_RISK:        { risk = safeLoadString(xrow, column); break; }        // Risk
                     case RQ_RISK_DESC:   { risk_desc = safeLoadString(xrow, column); break; }   // Risk description
+
+                    case RQ_CONSOLE:     { console = safeLoadString(xrow, column); break; }     // Console
+                    case RQ_CLIENT:      { client = safeLoadString(xrow, column); break; }      // Client part
+                    case RQ_MOBILE:      { mobile = safeLoadString(xrow, column); break; }      // Mobile application
+                    case RQ_NOTE_NEW:    { note_new = safeLoadString(xrow, column); break; }    // Note for new application
+                    case RQ_EXIST_OLD:   { exist_old = safeLoadString(xrow, column); break; }   // Has is old application
+                    case RQ_NOTE_OLD:    { note_old = safeLoadString(xrow, column); break; }    // Note for old application
                 }
             }
         }
@@ -226,10 +253,11 @@ public class Requirement extends BaseRequirement {
     /**
      * Fills XLSX row from object
      * @param row - XLSX row
+     * @param describer - column describer (it maps requirement fields to Excel columns)
      */
-    public void saveToRow(XSSFRow row) {
-        for (Map.Entry<RequirementColumnType, Integer> item : describer.map.entrySet()) {
-            RequirementColumnType rqType = item.getKey();
+    public void saveToRow(XSSFRow row, RequirementColumnDescriber describer) {
+        for (Map.Entry<RequirementFieldType, Integer> item : describer.map.entrySet()) {
+            RequirementFieldType rqType = item.getKey();
             Integer column = item.getValue();
             if (column != null) {
                 XSSFCell cell = row.createCell(column);
@@ -259,6 +287,13 @@ public class Requirement extends BaseRequirement {
                     case RQ_SECONDARY:   { cell.setCellValue(secondary); break; }   // Secondary responsible
                     case RQ_RISK:        { cell.setCellValue(risk); break; }        // Risk
                     case RQ_RISK_DESC:   { cell.setCellValue(risk_desc); break; }   // Risk description
+
+                    case RQ_CONSOLE:     { cell.setCellValue(console); break; }     // Console
+                    case RQ_CLIENT:      { cell.setCellValue(client); break; }      // Client part
+                    case RQ_MOBILE:      { cell.setCellValue(mobile); break; }      // Mobile application
+                    case RQ_NOTE_NEW:    { cell.setCellValue(note_new); break; }    // Note for new application
+                    case RQ_EXIST_OLD:   { cell.setCellValue(exist_old); break; }   // Has is old application
+                    case RQ_NOTE_OLD:    { cell.setCellValue(note_old); break; }    // Note for old application
                 }
             }
         }
@@ -267,11 +302,11 @@ public class Requirement extends BaseRequirement {
     /**
      * Function compares two requirements (this and another), return details: list of indexes for all different columns
      * @param o - requiremet for compare
-     * @return null (if something gone wrong) or list of indexes for all different columns (e.g. 0,2,3,5): indexes start from "0"
+     * @return null (if something gone wrong) or list of different columns (set of RequirementFieldType)
      */
-    public List<Integer> compare(Object o) {
+    public List<RequirementFieldType> compare(Object o) {
 
-        ArrayList<Integer> changes = new ArrayList<>();
+        ArrayList<RequirementFieldType> changes = new ArrayList<>();
 
         if (this == o) return null;
         if (o == null || getClass() != o.getClass()) return null;
@@ -280,31 +315,38 @@ public class Requirement extends BaseRequirement {
 
         if (!id.equals(that.id)) return null;
 
-        if (level != null ? !level.equals(that.level) : that.level != null) changes.add(0);
-        if (name != null ? !name.equals(that.name) : that.name != null) changes.add(1);
-        if (priority != null ? !priority.equals(that.priority) : that.priority != null) changes.add(2);
-        if (done != null ? !done.equals(that.done) : that.done != null) changes.add(3);
-        if (other != null ? !other.equals(that.other) : that.other != null) changes.add(4);
-        if (new_req != null ? !new_req.equals(that.new_req) : that.new_req != null) changes.add(5);
-        if (integration != null ? !integration.equals(that.integration) : that.integration != null) changes.add(6);
-        if (service != null ? !service.equals(that.service) : that.service != null) changes.add(7);
-        if (comment != null ? !comment.equals(that.comment) : that.comment != null) changes.add(8);
-        if (linked != null ? !linked.equals(that.linked) : that.linked != null) changes.add(9);
-        if (curr_status != null ? !curr_status.equals(that.curr_status) : that.curr_status != null) changes.add(10);
-        if (type != null ? !type.equals(that.type) : that.type != null) changes.add(11);
-        if (source != null ? !source.equals(that.source) : that.source != null) changes.add(12);
-        if (foundation != null ? !foundation.equals(that.foundation) : that.foundation != null) changes.add(13);
+        if (level != null ? !level.equals(that.level) : that.level != null) changes.add(RequirementFieldType.RQ_LEVEL);
+        if (name != null ? !name.equals(that.name) : that.name != null) changes.add(RequirementFieldType.RQ_NAME);
+        if (priority != null ? !priority.equals(that.priority) : that.priority != null) changes.add(RequirementFieldType.RQ_PRIORITY);
+        if (done != null ? !done.equals(that.done) : that.done != null) changes.add(RequirementFieldType.RQ_DONE);
+        if (other != null ? !other.equals(that.other) : that.other != null) changes.add(RequirementFieldType.RQ_OTHER);
+        if (new_req != null ? !new_req.equals(that.new_req) : that.new_req != null) changes.add(RequirementFieldType.RQ_NEW_REQ);
+        if (integration != null ? !integration.equals(that.integration) : that.integration != null) changes.add(RequirementFieldType.RQ_INTEGRATION);
+        if (service != null ? !service.equals(that.service) : that.service != null) changes.add(RequirementFieldType.RQ_SERVICE);
+        if (comment != null ? !comment.equals(that.comment) : that.comment != null) changes.add(RequirementFieldType.RQ_COMMENT);
+        if (linked != null ? !linked.equals(that.linked) : that.linked != null) changes.add(RequirementFieldType.RQ_LINKED);
+        if (curr_status != null ? !curr_status.equals(that.curr_status) : that.curr_status != null) changes.add(RequirementFieldType.RQ_CURR_STATUS);
+        if (type != null ? !type.equals(that.type) : that.type != null) changes.add(RequirementFieldType.RQ_TYPE);
+        if (source != null ? !source.equals(that.source) : that.source != null) changes.add(RequirementFieldType.RQ_SOURCE);
+        if (foundation != null ? !foundation.equals(that.foundation) : that.foundation != null) changes.add(RequirementFieldType.RQ_FOUNDATION);
 
-        if (version != null ? !version.equals(that.version) : that.version != null) changes.add(14);
-        if (release != null ? !release.equals(that.release) : that.release != null) changes.add(15);
-        if (questions != null ? !questions.equals(that.questions) : that.questions != null) changes.add(16);
-        if (other_rel != null ? !other_rel.equals(that.other_rel) : that.other_rel != null) changes.add(17);
-        if (tt != null ? !tt.equals(that.tt) : that.tt != null) changes.add(18);
-        if (trello != null ? !trello.equals(that.trello) : that.trello != null) changes.add(19);
-        if (primary != null ? !primary.equals(that.primary) : that.primary != null) changes.add(20);
-        if (secondary != null ? !secondary.equals(that.secondary) : that.secondary != null) changes.add(21);
-        if (risk != null ? !risk.equals(that.risk) : that.risk != null) changes.add(22);
-        if (risk_desc != null ? !risk_desc.equals(that.risk_desc) : that.risk_desc != null) changes.add(23);
+        if (version != null ? !version.equals(that.version) : that.version != null) changes.add(RequirementFieldType.RQ_VERSION);
+        if (release != null ? !release.equals(that.release) : that.release != null) changes.add(RequirementFieldType.RQ_RELEASE);
+        if (questions != null ? !questions.equals(that.questions) : that.questions != null) changes.add(RequirementFieldType.RQ_QUESTIONS);
+        if (other_rel != null ? !other_rel.equals(that.other_rel) : that.other_rel != null) changes.add(RequirementFieldType.RQ_OTHER_REL);
+        if (tt != null ? !tt.equals(that.tt) : that.tt != null) changes.add(RequirementFieldType.RQ_TT);
+        if (trello != null ? !trello.equals(that.trello) : that.trello != null) changes.add(RequirementFieldType.RQ_TRELLO);
+        if (primary != null ? !primary.equals(that.primary) : that.primary != null) changes.add(RequirementFieldType.RQ_PRIMARY);
+        if (secondary != null ? !secondary.equals(that.secondary) : that.secondary != null) changes.add(RequirementFieldType.RQ_SECONDARY);
+        if (risk != null ? !risk.equals(that.risk) : that.risk != null) changes.add(RequirementFieldType.RQ_RISK);
+        if (risk_desc != null ? !risk_desc.equals(that.risk_desc) : that.risk_desc != null) changes.add(RequirementFieldType.RQ_RISK_DESC);
+
+        if (console != null ? !console.equals(that.console) : that.console != null) changes.add(RequirementFieldType.RQ_CONSOLE);
+        if (client != null ? !client.equals(that.client) : that.client != null) changes.add(RequirementFieldType.RQ_CLIENT);
+        if (mobile != null ? !mobile.equals(that.mobile) : that.mobile != null) changes.add(RequirementFieldType.RQ_MOBILE);
+        if (note_new != null ? !note_new.equals(that.note_new) : that.note_new != null) changes.add(RequirementFieldType.RQ_NOTE_NEW);
+        if (exist_old != null ? !exist_old.equals(that.exist_old) : that.exist_old != null) changes.add(RequirementFieldType.RQ_EXIST_OLD);
+        if (note_old != null ? !note_old.equals(that.note_old) : that.note_old != null) changes.add(RequirementFieldType.RQ_NOTE_OLD);
 
         return changes;
     }
@@ -315,7 +357,7 @@ public class Requirement extends BaseRequirement {
      * @return - array with sheet data
      * @throws IOException - may throws file reading errors
      */
-    static LinkedHashMap<String, Requirement> readFromExcel(String file) throws IOException {
+    static LinkedHashMap<String, Requirement> readFromExcel(String file, RequirementColumnDescriber describer) throws IOException {
 
         LinkedHashMap<String, Requirement> array = new LinkedHashMap<>();
 
@@ -332,7 +374,7 @@ public class Requirement extends BaseRequirement {
             if (row == null) break;
 
             Requirement req = new Requirement();
-            req.loadFromRow(row);
+            req.loadFromRow(row, describer);
             if (array.containsKey(req.id)) {
                 System.out.println("ERROR. Row " + (rowNum + 1) + " contains requirement was already loaded before for row " + (array.get(req.id).getRow() + 1));
             }
