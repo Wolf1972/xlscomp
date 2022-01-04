@@ -341,6 +341,8 @@ public class XLSCompareMain {
 
         LinkedHashMap<String, Requirement> mergedMap = new LinkedHashMap<>();
 
+        int mergeRows = 0;
+
         for (Map.Entry<String, Requirement> item : oldMap.entrySet()) {
             String key = item.getKey();
             Requirement req = item.getValue();
@@ -359,8 +361,10 @@ public class XLSCompareMain {
                             }
                         }
 //                        System.out.print("Copy row " + req.getRow() + " to row " + newReq.getRow() + ", columns " + changedColumns + "... ");
-                        XLSUtil.copyRow(oldSheet, newSheet, false, req.getRow(), newReq.getRow(), columnsQty, onlyColumns, isEmptyOnly, null,
-                                oldDescriber, newDescriber, true);
+                        if (XLSUtil.copyRow(oldSheet, newSheet, false, req.getRow(), newReq.getRow(), columnsQty, onlyColumns, isEmptyOnly, null,
+                                oldDescriber, newDescriber, true)) {
+                            mergeRows++;
+                        }
                         XSSFRow newRow = newSheet.getRow(newReq.getRow());
                         if (isNewRefresh) newReq.loadFromRow(newRow, newDescriber); // Refresh new requirement with copying results
 //                        System.out.println("Done.");
@@ -368,7 +372,7 @@ public class XLSCompareMain {
                 }
             }
         }
-        System.out.println("Merging done. " + mergedMap.size() + " row(s) merged.");
+        System.out.println("Merging done. " + mergeRows + " row(s) were merged from " + mergedMap.size() + " total difference rows.");
         return mergedMap;
     }
 

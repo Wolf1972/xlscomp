@@ -253,7 +253,7 @@ public class XLSUtil {
      * Based on some stackoverflow topics
      * @param sourceWorksheet - source sheet
      * @param targetWorksheet - target sheet
-     * @param isAppend - append mode
+     * @param isAppend - when true: if the row already exist in target sheet, push down all rows by 1 and create a new row, when false - already overwrite row in the target sheet
      * @param sourceRowNum = source row number
      * @param targetRowNum - destination row number
      * @param columnsQty - quantity of columns to copy (to prevent output service columns), when 0 - all columns copy
@@ -263,8 +263,9 @@ public class XLSUtil {
      * @param sourceDescriber - source sheet column describer (if only structure difference between source and target)
      * @param targetDescriber - target sheet column describer (if only structure difference between source and target)
      * @param isDebug - debug mode
+     * @return - when true - has any changes in target row; when false - target row without changes
      */
-    static void copyRow(XSSFSheet sourceWorksheet, XSSFSheet targetWorksheet,
+    static boolean copyRow(XSSFSheet sourceWorksheet, XSSFSheet targetWorksheet,
                         boolean isAppend,
                         int sourceRowNum, int targetRowNum,
                         int columnsQty,
@@ -279,8 +280,10 @@ public class XLSUtil {
         XSSFRow newRow = targetWorksheet.getRow(targetRowNum);
         XSSFRow sourceRow = sourceWorksheet.getRow(sourceRowNum);
 
-        StringBuilder debugStr = new StringBuilder("Merge row ");
-        debugStr.append(sourceRowNum + " " + sourceRow.getCell(1).getStringCellValue() + ": ");
+        StringBuilder debugStr = new StringBuilder("Merge source row " + (sourceRowNum + 1) + " to target row " + (targetRowNum + 1));
+        if (isDebug) {
+            debugStr.append(" " + sourceRow.getCell(1).getStringCellValue() + ": ");
+        }
 
         if (isAppend) {
             // If the row exist in destination, push down all rows by 1 else create a new row
@@ -292,6 +295,8 @@ public class XLSUtil {
         }
         else
             newRow = targetWorksheet.getRow(targetRowNum);
+
+        boolean isAnyChanges = false;
 
         // Loop through source columns to add to new row
         for (int oldIdx = 0; oldIdx < sourceRow.getLastCellNum(); oldIdx++) {
@@ -352,52 +357,93 @@ public class XLSUtil {
             }
             if (!isNeedCopy) continue;
 
-            debugStr.append("[" + oldIdx + " -> " + newIdx + "]: ");
+            boolean isCopied = false;
 
-            // Set the cell data value
+            String debugValue = "";
+
+            // Retrieve old cell data value
+            String oldStringValue = "";
+            boolean oldBooleanValue = false;
+            byte oldErrorValue = 0;
+            double oldDoubleValue = 0.0;
+            XSSFRichTextString oldRichValue = new XSSFRichTextString("");
             CellType oldType = oldCell.getCellType();
             if (oldType == CellType.BLANK) {
-                newCell.setCellType(oldType);
-                String old = oldCell.getStringCellValue();
-                newCell.setCellValue(old);
-                debugStr.append(old);
+                oldStringValue = oldCell.getStringCellValue();
             }
             else if (oldType == CellType.BOOLEAN) {
-                newCell.setCellType(oldType);
-                boolean old = oldCell.getBooleanCellValue();
-                newCell.setCellValue(old);
-                debugStr.append(old);
+                oldBooleanValue = oldCell.getBooleanCellValue();
             }
             else if (oldType == CellType.ERROR) {
-                newCell.setCellType(oldType);
-                byte old = oldCell.getErrorCellValue();
-                newCell.setCellErrorValue(old);
-                debugStr.append(old);
+                oldErrorValue = oldCell.getErrorCellValue();
             }
             else if (oldType == CellType.FORMULA) {
-                String old = oldCell.getCellFormula();
-                newCell.setCellFormula(old);
-                debugStr.append(old);
+                oldStringValue = oldCell.getCellFormula();
             }
             else if (oldType == CellType.NUMERIC) {
-                newCell.setCellType(oldType);
-                double old = oldCell.getNumericCellValue();
-                newCell.setCellValue(old);
-                debugStr.append(old);
+                oldDoubleValue = oldCell.getNumericCellValue();
             }
             else if (oldType == CellType.STRING) {
-                newCell.setCellType(oldType);
-                // XSSFRichTextString old = oldCell.getRichStringCellValue();
-                String old = oldCell.getStringCellValue();
-                newCell.setCellValue(old);
-                debugStr.append(old);
+                oldRichValue = oldCell.getRichStringCellValue();
             }
 
-            debugStr.append(" ");
+            // Set new cell data value
+            if (oldType == CellType.BLANK) {
+                if (!oldStringValue.isEmpty()) {
+                    newCell.setCellType(oldType);
+                    newCell.setCellValue(oldStringValue);
+                    debugValue = oldStringValue;
+                    isCopied = true;
+                }
+            }
+            else if (oldType == CellType.BOOLEAN) {
+                if (oldBooleanValue) {
+                    newCell.setCellType(oldType);
+                    newCell.setCellValue(oldBooleanValue);
+                    debugValue = oldBooleanValue ? "true" : "false";
+                    isCopied = true;
+                }
+            }
+            else if (oldType == CellType.ERROR) {
+                if (oldErrorValue > 0) {
+                    newCell.setCellType(oldType);
+                    newCell.setCellErrorValue(oldErrorValue);
+                    debugValue = "E:" + Byte.toString(oldErrorValue);
+                    isCopied = true;
+                }
+            }
+            else if (oldType == CellType.FORMULA) {
+                if (!oldStringValue.isEmpty()) {
+                    newCell.setCellFormula(oldStringValue);
+                    debugValue = oldStringValue;
+                    isCopied = true;
+                }
+            }
+            else if (oldType == CellType.NUMERIC) {
+                if (oldDoubleValue != 0.0) {
+                    newCell.setCellType(oldType);
+                    newCell.setCellValue(oldDoubleValue);
+                    debugValue = Double.toString(oldDoubleValue);
+                    isCopied = true;
+                }
+            }
+            else if (oldType == CellType.STRING) {
+                if (!oldRichValue.toString().isEmpty()) {
+                    newCell.setCellType(oldType);
+                    newCell.setCellValue(oldRichValue);
+                    debugValue = oldRichValue.toString();
+                    isCopied = true;
+                }
+            }
+
+            if (isCopied) {
+                isAnyChanges = true;
+                if (isDebug) debugStr.append("[" + oldIdx + " -> " + newIdx + "]: " + debugValue + "; ");
+            }
 
         }
 
-        if (isDebug) System.out.println(debugStr.toString());
+        if (isDebug && isAnyChanges) System.out.println(debugStr.toString());
 
         // If there are any merged regions in the source row, copy to new row
         for (int i = 0; i < sourceWorksheet.getNumMergedRegions(); i++) {
@@ -412,12 +458,14 @@ public class XLSUtil {
                 targetWorksheet.addMergedRegion(newCellRangeAddress);
             }
         }
+
+        return isAnyChanges;
     }
 
     /**
      * Previous method by default - without debug
      */
-    static void copyRow(XSSFSheet sourceWorksheet, XSSFSheet targetWorksheet,
+    static boolean copyRow(XSSFSheet sourceWorksheet, XSSFSheet targetWorksheet,
                         boolean isAppend,
                         int sourceRowNum, int targetRowNum,
                         int columnsQty,
@@ -426,7 +474,7 @@ public class XLSUtil {
                         ArrayList<XSSFCellStyle> columnStyles,
                         RequirementColumnDescriber sourceDescriber,
                         RequirementColumnDescriber targetDescriber) {
-        copyRow(sourceWorksheet, targetWorksheet, isAppend, sourceRowNum, targetRowNum, columnsQty,
-                onlyColumns, isOnlyEmpty, columnStyles, sourceDescriber, targetDescriber, false);
+        return copyRow(sourceWorksheet, targetWorksheet, isAppend, sourceRowNum, targetRowNum, columnsQty,
+                       onlyColumns, isOnlyEmpty, columnStyles, sourceDescriber, targetDescriber, false);
     };
 }

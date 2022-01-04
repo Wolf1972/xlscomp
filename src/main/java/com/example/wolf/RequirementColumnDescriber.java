@@ -1,12 +1,13 @@
 package com.example.wolf;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
 public class RequirementColumnDescriber {
 
-    public HashMap<RequirementFieldType, Integer> map = new HashMap<>();
-    public HashMap<Integer, RequirementFieldType> reverse = new HashMap<>();
+    public HashMap<RequirementFieldType, Integer> map = new HashMap<>(); // Describer: fieldtype - column
+    public HashMap<Integer, RequirementFieldType> reverse = new HashMap<>(); // Reverse describer: column - fieldType
 
     public RequirementColumnDescriber(HashMap<RequirementFieldType, Integer> map) {
         this.map = map;
@@ -23,5 +24,16 @@ public class RequirementColumnDescriber {
 
     public RequirementFieldType getField(int column) {
         return reverse.get(column);
+    }
+
+    /**
+     * Builds mapping between two structures: this and specified (target)
+     * @param targetDescriber - target describer
+     * @return - array with mapping: list of all this columns with indexes in target describer (or null, if column doesn't exist in target describer)
+     */
+    public ArrayList<Integer> structureMappingBuilder(RequirementColumnDescriber targetDescriber) {
+        ArrayList<Integer> mapping = new ArrayList<>();
+        // TODO
+        return mapping;
     }
 }
